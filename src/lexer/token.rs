@@ -53,14 +53,16 @@ pub enum TokenType {
 pub enum Literal {
     Str(String),
     Num(f64),
+    True,
+    False,
     Nil,
 }
 
 pub struct Token {
-    token_type: TokenType,
-    lexeme: String,
-    literal: Literal,
-    line: usize,
+    pub token_type: TokenType,
+    pub lexeme: String,
+    pub literal: Literal,
+    pub line: usize,
 }
 
 impl Token {
@@ -80,6 +82,8 @@ impl fmt::Display for Token {
             Literal::Str(str) => str.clone(),
             Literal::Num(num) => num.to_string(),
             Literal::Nil => "".to_string(),
+            Literal::True => "true".to_string(),
+            Literal::False => "false".to_string(),
         };
         write!(
             f,
