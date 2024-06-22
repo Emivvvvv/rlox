@@ -1,7 +1,4 @@
-mod expr;
-mod lexer;
-mod lox;
-
+use rlox::lox;
 use std::env::args;
 use std::process::exit;
 

@@ -5,7 +5,7 @@ use super::token::Literal;
 
 pub struct Lexer {
     source: String,
-    tokens: Vec<Token>,
+    pub tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
@@ -23,7 +23,7 @@ impl Lexer {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> &Vec<Token> {
+    pub fn scan_tokens(&mut self) {
         while !self.is_at_end() {
             self.start = self.current;
             let _ = &self.scan_token();
@@ -35,8 +35,6 @@ impl Lexer {
             Literal::Nil,
             self.line,
         ));
-
-        &self.tokens
     }
 
     fn is_at_end(&self) -> bool {
