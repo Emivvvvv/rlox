@@ -8,7 +8,7 @@ Work in progress!
 |        Scanning        |   ✅    |
 |   Representing Code    |   ✅    |
 |  Parsing Expressions   |   ✅    |
-| Evaluating Expressions |   ⏳    |
+| Evaluating Expressions |   ✅    |
 |  Statements and State  |   ⏳    |
 |      Control Flow      |   ⏳    |
 |       Functions        |   ⏳    |
