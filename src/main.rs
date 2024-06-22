@@ -10,12 +10,8 @@ fn main() {
         exit(64);
     } else if args.len() == 2 {
         if let Err(e) = lox::run_file(&args[1]) {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                println!("The file doesn't exist!");
-                exit(65);
-            } else {
-                panic!("{}", e);
-            }
+            eprint!("{e}");
+            exit(65)
         };
     } else {
         let _ = lox::run_prompt();

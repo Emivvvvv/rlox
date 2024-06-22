@@ -17,10 +17,3 @@ pub enum Expr {
         right: Box<Expr>,
     },
 }
-
-#[allow(dead_code)]
-impl Expr {
-    fn accept<R, F: FnOnce(&Expr) -> R>(&self, visit: F) -> R {
-        visit(self)
-    }
-}

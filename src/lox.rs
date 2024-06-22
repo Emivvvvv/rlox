@@ -1,22 +1,62 @@
+use std::error::Error;
+use std::fmt;
 use std::fs;
-use std::io::{stdin, stdout, BufRead, BufReader, Result, Write};
+use std::io;
+use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::Path;
 
+use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lexer::lexer;
 use crate::lexer::token::{Token, TokenType};
 use crate::parser::Parser;
 
-static mut HAD_ERROR: bool = false;
+#[derive(Debug)]
+pub enum LoxError {
+    IOError(io::Error),
+    Error(String),
+    RuntimeError(String),
+}
 
-pub fn run_file(file_path: &String) -> Result<()> {
+impl fmt::Display for LoxError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LoxError::IOError(err) => write!(f, "IO Error: {}", err),
+            LoxError::Error(msg) => write!(f, "Error: {}", msg),
+            LoxError::RuntimeError(msg) => write!(f, "Runtime Error: {}", msg),
+        }
+    }
+}
+
+impl Error for LoxError {}
+
+impl From<io::Error> for LoxError {
+    fn from(err: io::Error) -> LoxError {
+        LoxError::IOError(err)
+    }
+}
+
+static mut HAD_ERROR: bool = false;
+static mut HAD_RUNTIME_ERROR: bool = false;
+
+pub fn run_file(file_path: &String) -> Result<(), LoxError> {
     let path = Path::new(file_path);
     let file_string = fs::read_to_string(path)?;
 
     run(file_string)?;
+
+    unsafe {
+        if HAD_ERROR {
+            return Err(LoxError::Error("Compilation error".to_string()));
+        }
+        if HAD_RUNTIME_ERROR {
+            return Err(LoxError::RuntimeError("Runtime error".to_string()));
+        }
+    }
+
     Ok(())
 }
 
-pub fn run_prompt() -> Result<()> {
+pub fn run_prompt() -> Result<(), LoxError> {
     let stdin = stdin();
     let input = stdin.lock();
     let mut reader = BufReader::new(input);
@@ -33,22 +73,33 @@ pub fn run_prompt() -> Result<()> {
         }
 
         run(line.trim().to_string())?;
+
+        unsafe {
+            HAD_ERROR = false;
+        }
     }
 
     Ok(())
 }
 
-fn run(source: String) -> Result<()> {
+fn run(source: String) -> Result<(), LoxError> {
     let mut lexer = lexer::Lexer::new(source);
     lexer.scan_tokens();
     let mut parser = Parser::new(lexer.tokens);
-    let _expression = parser.parse();
+    let expression = parser
+        .parse()
+        .map_err(|_| LoxError::Error("Error during parsing".to_string()))?;
 
     unsafe {
         if HAD_ERROR {
-            panic!("TODO!");
+            return Err(LoxError::Error("Error during parsing".to_string()));
+        }
+        if HAD_RUNTIME_ERROR {
+            return Err(LoxError::RuntimeError("Runtime error".to_string()));
         }
     }
+
+    Interpreter::interpret(expression);
 
     Ok(())
 }
@@ -66,5 +117,14 @@ pub fn report(line_num: usize, line: &str, message: &str) {
 
     unsafe {
         HAD_ERROR = true;
+    }
+}
+
+pub fn runtime_error(error: RuntimeError) {
+    let (token, err_msg) = error.get_info();
+    eprintln!("{}\n[line {}]", err_msg, token.line);
+
+    unsafe {
+        HAD_RUNTIME_ERROR = true;
     }
 }
