@@ -6,8 +6,8 @@ Work in progress!
 |        Chapter         | Status |
 |:----------------------:|:------:|
 |        Scanning        |   ✅    |
-|   Representing Code    |   ⏳    |
-|  Parsing Expressions   |   ⏳    |
+|   Representing Code    |   ✅    |
+|  Parsing Expressions   |   ✅    |
 | Evaluating Expressions |   ⏳    |
 |  Statements and State  |   ⏳    |
 |      Control Flow      |   ⏳    |
