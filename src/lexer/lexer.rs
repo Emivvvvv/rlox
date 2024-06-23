@@ -98,7 +98,7 @@ impl Lexer {
                 }
             }
             ' ' | '\r' | '\t' => return,
-            'n' => self.line += 1,
+            '\n' => self.line += 1,
             '"' => self.string(),
             '0'..='9' => self.number(),
             c => {
@@ -147,20 +147,30 @@ impl Lexer {
     }
 
     fn block_comment(&mut self) {
-        while self.peek() != '*' && self.peek_next() != '/' && !self.is_at_end() {
-            if self.peek() == '\n' {
-                self.line += 1
+        let mut nesting = 1;
+
+        while nesting > 0 && !self.is_at_end() {
+            if self.peek() == '/' && self.peek_next() == '*' {
+                // Detect opening of a nested comment
+                self.advance(); // Consume '/'
+                self.advance(); // Consume '*'
+                nesting += 1; // Increase nesting level
+            } else if self.peek() == '*' && self.peek_next() == '/' {
+                // Detect closing of a comment
+                self.advance(); // Consume '*'
+                self.advance(); // Consume '/'
+                nesting -= 1; // Decrease nesting level
+            } else {
+                if self.peek() == '\n' {
+                    self.line += 1;
+                }
+                self.advance();
             }
-            self.advance();
         }
 
-        if self.is_at_end() {
+        if nesting > 0 {
             report(self.line, "", "Unterminated block comment.");
-            return;
         }
-
-        self.advance(); // Consume '*'
-        self.advance(); // Consume '/'
     }
 
     fn string(&mut self) {
@@ -187,23 +197,33 @@ impl Lexer {
             self.advance();
         }
 
+        // Check for a fractional part
         if self.peek() == '.' && self.peek_next().is_digit(10) {
+            // Advance over the '.'
             self.advance();
 
+            // Continue with the fractional part
             while self.peek().is_digit(10) {
                 self.advance();
             }
         }
 
-        let num = self.source[self.start..self.current].to_string();
-        self.add_token(TokenType::Number, Literal::Num(num.parse::<f64>().unwrap()));
+        let num_str = self.source[self.start..self.current].to_string();
+        match num_str.parse::<f64>() {
+            Ok(num) => self.add_token(TokenType::Number, Literal::Num(num)),
+            Err(e) => report(
+                self.line,
+                &num_str,
+                &format!("Failed to parse number: {}", e),
+            ),
+        }
     }
 
     fn peek_next(&self) -> char {
         if self.current + 1 >= self.source.len() {
             return '\0';
         };
-        self.source.chars().nth(self.current).unwrap()
+        self.source.chars().nth(self.current + 1).unwrap()
     }
 
     fn identifier(&mut self) {
@@ -233,5 +253,172 @@ impl Lexer {
         };
 
         self.add_token(token_type, Literal::Nil);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Import everything from the parent module
+
+    #[test]
+    fn test_basic_tokens() {
+        let source = "( ) { } , . - + ; * ! = < > /";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        let expected_types = vec![
+            TokenType::LeftParen,
+            TokenType::RightParen,
+            TokenType::LeftBrace,
+            TokenType::RightBrace,
+            TokenType::Comma,
+            TokenType::Dot,
+            TokenType::Minus,
+            TokenType::Plus,
+            TokenType::Semicolon,
+            TokenType::Star,
+            TokenType::Bang,
+            TokenType::Equal,
+            TokenType::Less,
+            TokenType::Greater,
+            TokenType::Slash,
+            TokenType::Eof,
+        ];
+
+        assert_eq!(lexer.tokens.len(), expected_types.len());
+        for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
+            assert_eq!(token.token_type, *expected_type);
+        }
+    }
+
+    #[test]
+    fn test_string_literal() {
+        let source = "\"hello world\"";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        assert_eq!(lexer.tokens.len(), 2); // String token + EOF
+        assert_eq!(lexer.tokens[0].token_type, TokenType::String);
+        assert_eq!(lexer.tokens[0].lexeme, "\"hello world\"");
+    }
+
+    #[test]
+    fn test_numbers() {
+        let source = "123 456.789";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        println!("{:?}", lexer.tokens);
+        assert_eq!(
+            lexer.tokens.len(),
+            3,
+            "Expected 3 tokens, found {}",
+            lexer.tokens.len()
+        ); // Improved assertion message
+        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
+        assert_eq!(lexer.tokens[0].lexeme, "123");
+        assert_eq!(lexer.tokens[1].token_type, TokenType::Number);
+        assert_eq!(lexer.tokens[1].lexeme, "456.789");
+    }
+
+    #[test]
+    fn test_comments() {
+        let source = "// This is a comment\n123";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        // Only the number and EOF should be tokenized, not the comment
+        assert_eq!(lexer.tokens.len(), 2);
+        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
+        assert_eq!(lexer.tokens[0].lexeme, "123");
+    }
+
+    #[test]
+    fn test_block_comments() {
+        let source = "/* This is a block comment */ 456";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        // Only the number and EOF should be tokenized, not the block comment
+        assert_eq!(lexer.tokens.len(), 2);
+        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
+        assert_eq!(lexer.tokens[0].lexeme, "456");
+    }
+
+    #[test]
+    fn test_nested_block_comments() {
+        let source = "/* This is a /* nested */ block comment */ 789";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        // Only the number and EOF should be tokenized, not the nested block comment
+        assert_eq!(lexer.tokens.len(), 2);
+        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
+        assert_eq!(lexer.tokens[0].lexeme, "789");
+    }
+
+    #[test]
+    fn test_unterminated_string() {
+        let source = "\"This string does not close";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        // Expecting a report of an unterminated string
+        assert!(lexer
+            .tokens
+            .iter()
+            .any(|t| t.token_type == TokenType::Eof && t.lexeme.is_empty()));
+    }
+
+    #[test]
+    fn test_keywords() {
+        let source = "class var if else";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        let expected_types = vec![
+            TokenType::Class,
+            TokenType::Var,
+            TokenType::If,
+            TokenType::Else,
+            TokenType::Eof,
+        ];
+        assert_eq!(lexer.tokens.len(), expected_types.len());
+        for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
+            assert_eq!(token.token_type, *expected_type);
+        }
+    }
+
+    #[test]
+    fn test_identifiers() {
+        let source = "foo bar baz";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        let expected_types = vec![
+            TokenType::Identifier,
+            TokenType::Identifier,
+            TokenType::Identifier,
+            TokenType::Eof,
+        ];
+        assert_eq!(lexer.tokens.len(), expected_types.len());
+        for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
+            assert_eq!(token.token_type, *expected_type);
+            assert!(matches!(token.literal, Literal::Nil));
+        }
+    }
+
+    #[test]
+    fn test_mixed_input() {
+        let source = "var x = 100; // variable declaration\nfunc(y)";
+        let mut lexer = Lexer::new(source.to_string());
+        lexer.scan_tokens();
+        let expected_types = vec![
+            TokenType::Var,
+            TokenType::Identifier,
+            TokenType::Equal,
+            TokenType::Number,
+            TokenType::Semicolon,
+            TokenType::Identifier,
+            TokenType::LeftParen,
+            TokenType::Identifier,
+            TokenType::RightParen,
+            TokenType::Eof,
+        ];
+        assert_eq!(lexer.tokens.len(), expected_types.len());
+        for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
+            assert_eq!(token.token_type, *expected_type);
+        }
     }
 }
