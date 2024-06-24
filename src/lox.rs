@@ -1,10 +1,13 @@
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::Path;
+use std::rc::Rc;
 
+use crate::environment::Environment;
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lexer::lexer;
 use crate::lexer::token::{Token, TokenType};
@@ -82,24 +85,25 @@ pub fn run_prompt() -> Result<(), LoxError> {
     Ok(())
 }
 
-fn run(source: String) -> Result<(), LoxError> {
+pub fn run(source: String) -> Result<(), LoxError> {
     let mut lexer = lexer::Lexer::new(source);
     lexer.scan_tokens();
     let mut parser = Parser::new(lexer.tokens);
-    let expression = parser
+    let statements = parser
         .parse()
         .map_err(|_| LoxError::Error("Error during parsing".to_string()))?;
 
     unsafe {
         if HAD_ERROR {
-            return Err(LoxError::Error("Error during parsing".to_string()));
+            return Err(LoxError::Error("Error during lexing".to_string()));
         }
         if HAD_RUNTIME_ERROR {
             return Err(LoxError::RuntimeError("Runtime error".to_string()));
         }
     }
 
-    Interpreter::interpret(expression);
+    let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+    interpreter.interpret(statements);
 
     Ok(())
 }
@@ -113,7 +117,7 @@ pub fn error(token: Token, message: &str) {
 }
 
 pub fn report(line_num: usize, line: &str, message: &str) {
-    eprintln!("[line {line_num}] {line}: {message}");
+    eprintln!("[line {line_num}] {:?}: {message}", line);
 
     unsafe {
         HAD_ERROR = true;

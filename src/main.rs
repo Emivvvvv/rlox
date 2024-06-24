@@ -10,7 +10,7 @@ fn main() {
         exit(64);
     } else if args.len() == 2 {
         if let Err(e) = lox::run_file(&args[1]) {
-            eprint!("{e}");
+            eprintln!("{e}");
             exit(65)
         };
     } else {

@@ -1,29 +1,4 @@
-use crate::lexer::token::{Literal, Token};
-
-pub enum Expr {
-    Binary {
-        left: Box<Expr>,
-        operator: Token,
-        right: Box<Expr>,
-    },
-    Grouping {
-        expression: Box<Expr>,
-    },
-    Literal {
-        value: Literal,
-    },
-    Unary {
-        operator: Token,
-        right: Box<Expr>,
-    },
-    Variable {
-        name: Token,
-    },
-    Assign {
-        name: Token,
-        value: Box<Expr>,
-    },
-}
+use crate::{expr::Expr, lexer::token::Token};
 
 pub enum Stmt {
     Expression {
@@ -36,6 +11,9 @@ pub enum Stmt {
         name: Token,
         initializer: Option<Expr>,
     },
+    Block {
+        statements: Vec<Stmt>,
+    },
 }
 
 impl Into<Option<Expr>> for Stmt {
@@ -46,6 +24,7 @@ impl Into<Option<Expr>> for Stmt {
                 name: _,
                 initializer,
             } => initializer,
+            _ => panic!("Should not be reached!"),
         }
     }
 }

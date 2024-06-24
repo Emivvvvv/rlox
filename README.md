@@ -9,7 +9,7 @@ Work in progress!
 |   Representing Code    |   ✅    |
 |  Parsing Expressions   |   ✅    |
 | Evaluating Expressions |   ✅    |
-|  Statements and State  |   ⏳    |
+|  Statements and State  |   ✅    |
 |      Control Flow      |   ⏳    |
 |       Functions        |   ⏳    |
 | Resolving and Binding  |   ⏳    |
