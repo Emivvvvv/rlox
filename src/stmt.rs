@@ -1,5 +1,6 @@
 use crate::{expr::Expr, lexer::token::Token};
 
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Expression {
         expression: Expr,
@@ -13,6 +14,15 @@ pub enum Stmt {
     },
     Block {
         statements: Vec<Stmt>,
+    },
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
     },
 }
 

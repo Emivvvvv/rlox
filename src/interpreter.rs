@@ -200,6 +200,11 @@ impl Evaluable for Expr {
             Expr::Grouping { expression } => interpreter.evaluate(expression),
             Expr::Variable { name } => interpreter.evaluate_variable(name),
             Expr::Assign { name, value } => interpreter.evaluate_assign(name, value),
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => interpreter.evaluate_logical(left, operator, right),
         }
     }
 }
@@ -218,6 +223,14 @@ impl Evaluable for Stmt {
             Stmt::Print { expression } => interpreter.evaluate_print_stmt(expression),
             Stmt::Var { name, initializer } => interpreter.evaluate_var_stmt(name, initializer),
             Stmt::Block { statements } => interpreter.evaluate_block_stmt(statements),
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => interpreter.evaluate_if_stmt(condition, *then_branch.clone(), else_branch),
+            Stmt::While { condition, body } => {
+                interpreter.evaluate_while_stmt(condition, *body.clone())
+            }
         }
     }
 }
@@ -338,6 +351,24 @@ impl Interpreter {
         Ok(value)
     }
 
+    pub fn evaluate_logical(
+        &mut self,
+        left: &Expr,
+        operator: &Token,
+        right: &Expr,
+    ) -> Result<LoxValue, RuntimeError> {
+        let left = self.evaluate(left)?;
+        let is_truthy = left.is_truthy() == LoxValue::Boolean(true);
+
+        if operator.token_type == TokenType::Or && is_truthy
+            || operator.token_type != TokenType::Or && !is_truthy
+        {
+            return Ok(left);
+        }
+
+        self.evaluate(right)
+    }
+
     fn evaluate_expression_stmt(&mut self, expr: &Expr) -> Result<LoxValue, RuntimeError> {
         self.evaluate(expr)
     }
@@ -383,6 +414,33 @@ impl Interpreter {
         // Execute each statement in the block using the new interpreter
         for statement in statements {
             block_interpreter.evaluate(statement)?;
+        }
+
+        Ok(LoxValue::Nil)
+    }
+
+    pub fn evaluate_if_stmt(
+        &mut self,
+        condition: &Expr,
+        then_branch: Stmt,
+        else_branch: &Option<Box<Stmt>>,
+    ) -> Result<LoxValue, RuntimeError> {
+        if self.evaluate(condition)?.is_truthy() == LoxValue::Boolean(true) {
+            self.evaluate(&then_branch)?;
+        } else if let Some(else_stmt) = else_branch {
+            self.evaluate(else_stmt.as_ref())?;
+        }
+
+        Ok(LoxValue::Nil)
+    }
+
+    pub fn evaluate_while_stmt(
+        &mut self,
+        condition: &Expr,
+        body: Stmt,
+    ) -> Result<LoxValue, RuntimeError> {
+        while self.evaluate(condition)?.is_truthy() == LoxValue::Boolean(true) {
+            self.evaluate(&body)?;
         }
 
         Ok(LoxValue::Nil)
