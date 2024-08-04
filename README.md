@@ -10,7 +10,7 @@ Work in progress!
 |  Parsing Expressions   |   ✅    |
 | Evaluating Expressions |   ✅    |
 |  Statements and State  |   ✅    |
-|      Control Flow      |   ⏳    |
+|      Control Flow      |   ✅    |
 |       Functions        |   ⏳    |
 | Resolving and Binding  |   ⏳    |
 |        Classes         |   ⏳    |
