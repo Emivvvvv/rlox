@@ -1,19 +1,24 @@
 use crate::environment::{Environment, EnvironmentError};
 use crate::expr::Expr;
+use crate::globals::define_globals;
 use crate::lexer::token::Literal;
 use crate::lexer::token::Token;
 use crate::lexer::token::TokenType;
 use crate::lox;
+use crate::lox_callable::LoxCallable;
+use crate::lox_function::LoxFunction;
 use crate::stmt::Stmt;
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
+#[derive(Debug)]
 pub enum RuntimeError {
     IncorrectOperand(Token, LoxValueError),
     InterpreterPanic(Token, String),
     DivideByZero(Token, LoxValueError),
     UndefinedVariable(Token, EnvironmentError),
+    Return(LoxValue),
 }
 
 impl RuntimeError {
@@ -27,10 +32,12 @@ impl RuntimeError {
                 (token, environment_err.get_string())
             }
             RuntimeError::InterpreterPanic(token, err_str) => (token, err_str),
+            _ => panic!("Should not reach here!"),
         }
     }
 }
 
+#[derive(Debug)]
 pub enum LoxValueError {
     IncorrectOperand(String),
     DivideByZero(String),
@@ -46,12 +53,13 @@ impl LoxValueError {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone)]
 pub enum LoxValue {
     Nil,
     Boolean(bool),
     Number(f64),
     String(String),
+    Callable(Rc<dyn LoxCallable>),
 }
 
 impl LoxValue {
@@ -178,8 +186,35 @@ impl fmt::Display for LoxValue {
             }
             LoxValue::Boolean(bool) => bool.to_string(),
             LoxValue::Nil => "nil".to_string(),
+            LoxValue::Callable(callable) => callable.to_string(),
         };
         write!(f, "{text}",)
+    }
+}
+
+impl fmt::Debug for LoxValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LoxValue::Nil => write!(f, "Nil"),
+            LoxValue::Boolean(b) => write!(f, "Boolean({:?})", b),
+            LoxValue::Number(n) => write!(f, "Number({:?})", n),
+            LoxValue::String(s) => write!(f, "String({:?})", s),
+            LoxValue::Callable(_) => write!(f, "Callable(<function>)"),
+        }
+    }
+}
+
+impl PartialEq for LoxValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (LoxValue::Nil, LoxValue::Nil) => true,
+            (LoxValue::Boolean(a), LoxValue::Boolean(b)) => a == b,
+            (LoxValue::Number(a), LoxValue::Number(b)) => a == b,
+            (LoxValue::String(a), LoxValue::String(b)) => a == b,
+            // Comparing callables directly is usually not meaningful
+            (LoxValue::Callable(_), LoxValue::Callable(_)) => false,
+            _ => false,
+        }
     }
 }
 
@@ -205,6 +240,11 @@ impl Evaluable for Expr {
                 operator,
                 right,
             } => interpreter.evaluate_logical(left, operator, right),
+            Expr::Call {
+                callee,
+                paren,
+                arguments,
+            } => interpreter.evaluate_call(callee, paren, arguments),
         }
     }
 }
@@ -222,7 +262,7 @@ impl Evaluable for Stmt {
             Stmt::Expression { expression } => interpreter.evaluate_expression_stmt(expression),
             Stmt::Print { expression } => interpreter.evaluate_print_stmt(expression),
             Stmt::Var { name, initializer } => interpreter.evaluate_var_stmt(name, initializer),
-            Stmt::Block { statements } => interpreter.evaluate_block_stmt(statements),
+            Stmt::Block { statements } => interpreter.evaluate_block_stmt(statements, None),
             Stmt::If {
                 condition,
                 then_branch,
@@ -231,19 +271,36 @@ impl Evaluable for Stmt {
             Stmt::While { condition, body } => {
                 interpreter.evaluate_while_stmt(condition, *body.clone())
             }
+            Stmt::Function { name, params, body } => {
+                interpreter.interpret_function_stmt(name, params, body)
+            }
+            Stmt::Return { keyword, value } => interpreter.interpret_return_stmt(keyword, value),
         }
     }
 }
 
 pub struct Interpreter {
+    globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
-    pub fn new(environment: Rc<RefCell<Environment>>) -> Self {
+    pub fn new() -> Self {
+        // Create a new global environment
+        let globals = Rc::new(RefCell::new(Environment::new()));
+        define_globals(&globals);
+
+        // Initially, the environment is the global environment
+        let environment = Rc::clone(&globals);
+
         Self {
-            environment: environment,
+            globals,
+            environment,
         }
+    }
+
+    pub fn get_globals(&self) -> Rc<RefCell<Environment>> {
+        Rc::clone(&self.globals)
     }
 
     #[cfg(test)]
@@ -261,7 +318,7 @@ impl Interpreter {
     pub fn interpret(&mut self, statements: Vec<Stmt>) {
         for statement in statements {
             match self.evaluate(&statement) {
-                Ok(_) => continue, // println!("debug print: {value}")
+                Ok(_) => continue,
                 Err(e) => lox::runtime_error(e),
             }
         }
@@ -369,6 +426,45 @@ impl Interpreter {
         self.evaluate(right)
     }
 
+    pub fn evaluate_call(
+        &mut self,
+        callee: &Expr,
+        paren: &Token,
+        arguments: &Vec<Expr>,
+    ) -> Result<LoxValue, RuntimeError> {
+        let callee = self.evaluate(callee)?;
+
+        let mut evaluated_arguments = Vec::new();
+        for argument in arguments {
+            let value = self.evaluate(argument)?;
+            evaluated_arguments.push(value);
+        }
+
+        match callee {
+            LoxValue::Callable(function) => {
+                if arguments.len() != function.arity() {
+                    return Err(RuntimeError::InterpreterPanic(
+                        paren.clone(),
+                        format!(
+                            "Expected {} arguments but got {}.",
+                            function.arity(),
+                            arguments.len()
+                        ),
+                    ));
+                }
+                match function.call(self, evaluated_arguments) {
+                    Ok(value) => Ok(value), // Normal function return
+                    Err(RuntimeError::Return(return_value)) => Ok(return_value), // Handle the return exception
+                    Err(err) => Err(err), // Propagate other errors
+                }
+            }
+            _ => Err(RuntimeError::InterpreterPanic(
+                paren.clone(),
+                "Can only call functions and classes.".to_string(),
+            )),
+        }
+    }
+
     fn evaluate_expression_stmt(&mut self, expr: &Expr) -> Result<LoxValue, RuntimeError> {
         self.evaluate(expr)
     }
@@ -402,21 +498,29 @@ impl Interpreter {
         Ok(LoxValue::Nil)
     }
 
-    pub fn evaluate_block_stmt(&mut self, statements: &[Stmt]) -> Result<LoxValue, RuntimeError> {
-        // Create a new environment with the current environment as enclosing
-        let new_environment = Rc::new(RefCell::new(Environment::with_enclosing(Rc::clone(
-            &self.environment,
-        ))));
+    pub fn evaluate_block_stmt(
+        &mut self,
+        statements: &[Stmt],
+        environment: Option<Rc<RefCell<Environment>>>,
+    ) -> Result<LoxValue, RuntimeError> {
+        let previous_environment = Rc::clone(&self.environment);
 
-        // Create a new interpreter instance with the new environment
-        let mut block_interpreter = Interpreter::new(Rc::clone(&new_environment));
+        let new_environment = match environment {
+            Some(env) => env,
+            None => Rc::new(RefCell::new(Environment::with_enclosing(Rc::clone(
+                &self.environment,
+            )))),
+        };
 
-        // Execute each statement in the block using the new interpreter
-        for statement in statements {
-            block_interpreter.evaluate(statement)?;
-        }
+        self.environment = Rc::clone(&new_environment);
 
-        Ok(LoxValue::Nil)
+        let result = statements
+            .iter()
+            .try_for_each(|statement| self.evaluate(statement).map(|_| ()));
+
+        self.environment = previous_environment;
+
+        result.map(|_| LoxValue::Nil)
     }
 
     pub fn evaluate_if_stmt(
@@ -445,6 +549,40 @@ impl Interpreter {
 
         Ok(LoxValue::Nil)
     }
+
+    pub fn interpret_function_stmt(
+        &mut self,
+        name: &Token,
+        params: &Vec<Token>,
+        body: &Vec<Stmt>,
+    ) -> Result<LoxValue, RuntimeError> {
+        let function = LoxFunction::new(
+            name.clone(),
+            params.clone(),
+            body.clone(),
+            Rc::clone(&self.environment),
+        );
+
+        let callable: Rc<dyn LoxCallable> = Rc::new(function);
+
+        self.environment
+            .borrow_mut()
+            .define(name.lexeme.clone(), LoxValue::Callable(callable));
+
+        Ok(LoxValue::Nil)
+    }
+
+    pub fn interpret_return_stmt(
+        &mut self,
+        _keyword: &Token,
+        value: &Option<Expr>,
+    ) -> Result<LoxValue, RuntimeError> {
+        let value = match value {
+            Some(expr) => self.evaluate(expr)?,
+            None => LoxValue::Nil,
+        };
+        Err(RuntimeError::Return(value))
+    }
 }
 
 #[cfg(test)]
@@ -465,7 +603,7 @@ mod interpreter_tests {
         ];
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let output = interpreter.interpret_test(ast);
         assert_eq!(output, LoxValue::Number(7.0)); // 1 + (2 * 3) = 7
     }
@@ -481,7 +619,7 @@ mod interpreter_tests {
         ];
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let _ = interpreter.interpret_test(ast);
     }
 
@@ -497,7 +635,7 @@ mod interpreter_tests {
         ];
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let _ = interpreter.interpret_test(ast);
     }
 
@@ -522,7 +660,7 @@ mod interpreter_tests {
         ];
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let output = interpreter.interpret_test(ast);
         assert_eq!(output, LoxValue::String("Hello, world!".to_string()));
     }
@@ -542,7 +680,7 @@ mod interpreter_tests {
         ];
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let output = interpreter.interpret_test(ast);
         assert_eq!(output, LoxValue::Number(9.0)); // (1 + 2) * 3 = 9
     }
@@ -562,7 +700,7 @@ mod interpreter_tests {
         ];
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let output = interpreter.interpret_test(ast);
         assert_eq!(output, LoxValue::String("Hello, world!".to_string()));
     }
@@ -585,7 +723,7 @@ mod interpreter_tests {
 
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let output = interpreter.interpret_test(ast);
 
         assert_eq!(output, LoxValue::String("20".to_string()));
@@ -606,7 +744,7 @@ mod interpreter_tests {
 
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let output = interpreter.interpret_test(ast);
         assert_eq!(output, LoxValue::Nil);
     }
@@ -633,7 +771,7 @@ mod interpreter_tests {
 
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let output = interpreter.interpret_test(ast);
         assert_eq!(output, LoxValue::Nil);
     }
@@ -661,8 +799,31 @@ mod interpreter_tests {
 
         let mut parser = Parser::new(tokens);
         let ast = parser.parse().unwrap();
-        let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+        let mut interpreter = Interpreter::new();
         let output = interpreter.interpret_test(ast);
         assert_eq!(output, LoxValue::Nil); // Output from print is visible during test but not captured by assert
+    }
+
+    #[test]
+    fn test_clock_function() {
+        let tokens = vec![
+            Token::new(TokenType::Identifier, "clock".to_string(), Literal::Nil, 1),
+            Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
+            Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
+            Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
+            Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
+        ];
+
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse().unwrap();
+
+        let mut interpreter = Interpreter::new();
+        let output = interpreter.interpret_test(ast);
+
+        if let LoxValue::Number(time) = output {
+            assert!(time > 0.0);
+        } else {
+            panic!("Expected a number from clock function");
+        }
     }
 }

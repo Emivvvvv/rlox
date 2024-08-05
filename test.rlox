@@ -1,8 +1,23 @@
-var a = 0;
-var temp;
-
-for (var b = 1; a < 10000; b = temp + b) {
-  print a;
-  temp = a;
-  a = b;
+// Define the function
+fun add(a, b, c, d) {
+    print clock();
+    return a + b + c + d;
 }
+
+// Call the function and print the result
+print add(1, 2, 5, 2);
+
+
+fun makeCounter() {
+  var i = 0;
+  fun count() {
+    i = i + 1;
+    print i;
+  }
+
+  return count;
+}
+
+var counter = makeCounter();
+counter(); // "1".
+counter(); // "2".

@@ -17,6 +17,7 @@ impl EnvironmentError {
     }
 }
 
+#[derive(Debug)]
 pub struct Environment {
     values: HashMap<String, LoxValue>,
     enclosing: Option<Rc<RefCell<Environment>>>,

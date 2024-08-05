@@ -1,13 +1,10 @@
-use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::Path;
-use std::rc::Rc;
 
-use crate::environment::Environment;
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lexer::lexer;
 use crate::lexer::token::{Token, TokenType};
@@ -102,7 +99,7 @@ pub fn run(source: String) -> Result<(), LoxError> {
         }
     }
 
-    let mut interpreter = Interpreter::new(Rc::new(RefCell::new(Environment::new())));
+    let mut interpreter = Interpreter::new();
     interpreter.interpret(statements);
 
     Ok(())

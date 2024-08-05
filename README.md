@@ -1,8 +1,6 @@
 # rlox
 Rust implementation of the jlox interpreter from the second chapter of "Crafting Interpreters".
 
-Work in progress!
-
 |        Chapter         | Status |
 |:----------------------:|:------:|
 |        Scanning        |   ✅    |
@@ -11,7 +9,7 @@ Work in progress!
 | Evaluating Expressions |   ✅    |
 |  Statements and State  |   ✅    |
 |      Control Flow      |   ✅    |
-|       Functions        |   ⏳    |
+|       Functions        |   ✅    |
 | Resolving and Binding  |   ⏳    |
 |        Classes         |   ⏳    |
 |      Inheritance       |   ⏳    |

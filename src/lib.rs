@@ -1,7 +1,10 @@
 pub mod environment;
 pub mod expr;
+pub mod globals;
 pub mod interpreter;
 pub mod lexer;
 pub mod lox;
+pub mod lox_callable;
+pub mod lox_function;
 pub mod parser;
 pub mod stmt;
