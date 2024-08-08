@@ -1,14 +1,17 @@
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::Path;
+use std::rc::Rc;
 
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lexer::lexer;
 use crate::lexer::token::{Token, TokenType};
 use crate::parser::Parser;
+use crate::resolver::Resolver;
 
 #[derive(Debug)]
 pub enum LoxError {
@@ -100,6 +103,27 @@ pub fn run(source: String) -> Result<(), LoxError> {
     }
 
     let mut interpreter = Interpreter::new();
+
+    let rc_refcell_interpreter = Rc::new(RefCell::new(interpreter));
+
+    {
+        let mut resolver = Resolver::new(Rc::clone(&rc_refcell_interpreter));
+        resolver.resolve_vec(&statements);
+    }
+
+    unsafe {
+        if HAD_ERROR {
+            return Err(LoxError::Error("Error during lexing".to_string()));
+        }
+        if HAD_RUNTIME_ERROR {
+            return Err(LoxError::RuntimeError("Runtime error".to_string()));
+        }
+    }
+
+    interpreter = Rc::try_unwrap(rc_refcell_interpreter)
+        .expect("More than one strong reference exists!")
+        .into_inner();
+
     interpreter.interpret(statements);
 
     Ok(())

@@ -1,23 +1,10 @@
-// Define the function
-fun add(a, b, c, d) {
-    print clock();
-    return a + b + c + d;
+var a = "global";
+{
+    fun showA() {
+    print a;
+    }
+
+    showA();
+    var a = "block";
+    showA();
 }
-
-// Call the function and print the result
-print add(1, 2, 5, 2);
-
-
-fun makeCounter() {
-  var i = 0;
-  fun count() {
-    i = i + 1;
-    print i;
-  }
-
-  return count;
-}
-
-var counter = makeCounter();
-counter(); // "1".
-counter(); // "2".

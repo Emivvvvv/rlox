@@ -1,3 +1,8 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt;
+use std::rc::Rc;
+
 use crate::environment::{Environment, EnvironmentError};
 use crate::expr::Expr;
 use crate::globals::define_globals;
@@ -8,9 +13,6 @@ use crate::lox;
 use crate::lox_callable::LoxCallable;
 use crate::lox_function::LoxFunction;
 use crate::stmt::Stmt;
-use std::cell::RefCell;
-use std::fmt;
-use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -162,7 +164,7 @@ impl From<&Literal> for LoxValue {
     fn from(literal: &Literal) -> Self {
         match literal {
             Literal::Str(str) => Self::String(str.clone()),
-            Literal::Num(num) => Self::Number(num.clone()),
+            Literal::Num(num) => Self::Number(num.clone().into()),
             Literal::Nil => Self::Nil,
             Literal::True => Self::Boolean(true),
             Literal::False => Self::Boolean(false),
@@ -279,9 +281,11 @@ impl Evaluable for Stmt {
     }
 }
 
+#[derive(Debug)]
 pub struct Interpreter {
     globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
+    locals: HashMap<Expr, usize>,
 }
 
 impl Interpreter {
@@ -293,9 +297,12 @@ impl Interpreter {
         // Initially, the environment is the global environment
         let environment = Rc::clone(&globals);
 
+        let locals = HashMap::new();
+
         Self {
             globals,
             environment,
+            locals,
         }
     }
 
@@ -322,6 +329,10 @@ impl Interpreter {
                 Err(e) => lox::runtime_error(e),
             }
         }
+    }
+
+    pub fn resolve(&mut self, expr: Expr, depth: usize) {
+        self.locals.insert(expr, depth);
     }
 
     fn evaluate(&mut self, evaluable: &dyn Evaluable) -> Result<LoxValue, RuntimeError> {
@@ -392,20 +403,46 @@ impl Interpreter {
     }
 
     fn evaluate_variable(&mut self, name: &Token) -> Result<LoxValue, RuntimeError> {
-        self.environment
-            .borrow_mut()
-            .get(name)
-            .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
+        self.look_up_variable(name)
+    }
+
+    fn look_up_variable(&mut self, name: &Token) -> Result<LoxValue, RuntimeError> {
+        let distance_option = self.locals.get(&Expr::Variable { name: name.clone() });
+
+        match distance_option {
+            Some(distance) => self
+                .environment
+                .borrow_mut()
+                .get_at(*distance, name)
+                .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+            None => self
+                .globals
+                .borrow_mut()
+                .get(name)
+                .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+        }
     }
 
     fn evaluate_assign(&mut self, name: &Token, expr: &Expr) -> Result<LoxValue, RuntimeError> {
         let value = self.evaluate(expr)?;
-        self.environment
-            .borrow_mut()
-            .assign(name, value.clone())
-            .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
 
-        Ok(value)
+        let distance_option = self.locals.get(&Expr::Assign {
+            name: name.clone(),
+            value: Box::new(expr.clone()),
+        });
+
+        match distance_option {
+            Some(distance) => self
+                .environment
+                .borrow_mut()
+                .assign_at(*distance, name, value)
+                .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+            None => self
+                .globals
+                .borrow_mut()
+                .assign(name, value)
+                .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+        }
     }
 
     pub fn evaluate_logical(
@@ -593,11 +630,26 @@ mod interpreter_tests {
     #[test]
     fn test_arithmetic_expression() {
         let tokens = vec![
-            Token::new(TokenType::Number, "1".to_string(), Literal::Num(1.0), 1),
+            Token::new(
+                TokenType::Number,
+                "1".to_string(),
+                Literal::Num(1.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(2.0), 1),
+            Token::new(
+                TokenType::Number,
+                "2".to_string(),
+                Literal::Num(2.0.into()),
+                1,
+            ),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(3.0), 1),
+            Token::new(
+                TokenType::Number,
+                "3".to_string(),
+                Literal::Num(3.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -627,9 +679,19 @@ mod interpreter_tests {
     #[should_panic]
     fn test_division_by_zero() {
         let tokens = vec![
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(10.0), 1),
+            Token::new(
+                TokenType::Number,
+                "10".to_string(),
+                Literal::Num(10.0.into()),
+                1,
+            ),
             Token::new(TokenType::Slash, "/".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "0".to_string(), Literal::Num(0.0), 1),
+            Token::new(
+                TokenType::Number,
+                "0".to_string(),
+                Literal::Num(0.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -669,12 +731,27 @@ mod interpreter_tests {
     fn test_grouping_and_precedence() {
         let tokens = vec![
             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "1".to_string(), Literal::Num(1.0), 1),
+            Token::new(
+                TokenType::Number,
+                "1".to_string(),
+                Literal::Num(1.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(2.0), 1),
+            Token::new(
+                TokenType::Number,
+                "2".to_string(),
+                Literal::Num(2.0.into()),
+                1,
+            ),
             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(3.0), 1),
+            Token::new(
+                TokenType::Number,
+                "3".to_string(),
+                Literal::Num(3.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -711,12 +788,27 @@ mod interpreter_tests {
         let tokens = vec![
             Token::new(TokenType::Print, "print".to_string(), Literal::Nil, 1),
             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(2.0), 1),
+            Token::new(
+                TokenType::Number,
+                "2".to_string(),
+                Literal::Num(2.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(3.0), 1),
+            Token::new(
+                TokenType::Number,
+                "3".to_string(),
+                Literal::Num(3.0.into()),
+                1,
+            ),
             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "4".to_string(), Literal::Num(4.0), 1),
+            Token::new(
+                TokenType::Number,
+                "4".to_string(),
+                Literal::Num(4.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -736,7 +828,12 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(10.0), 1),
+            Token::new(
+                TokenType::Number,
+                "10".to_string(),
+                Literal::Num(10.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
@@ -756,13 +853,23 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(10.0), 1),
+            Token::new(
+                TokenType::Number,
+                "10".to_string(),
+                Literal::Num(10.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::LeftBrace, "{".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "y".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "5".to_string(), Literal::Num(5.0), 1),
+            Token::new(
+                TokenType::Number,
+                "5".to_string(),
+                Literal::Num(5.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
@@ -791,7 +898,12 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "number".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "42".to_string(), Literal::Num(42.0), 1),
+            Token::new(
+                TokenType::Number,
+                "42".to_string(),
+                Literal::Num(42.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),

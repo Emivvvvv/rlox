@@ -17,7 +17,7 @@ impl EnvironmentError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Environment {
     values: HashMap<String, LoxValue>,
     enclosing: Option<Rc<RefCell<Environment>>>,
@@ -58,6 +58,30 @@ impl Environment {
         }
     }
 
+    pub fn get_at(&self, distance: usize, name: &Token) -> Result<LoxValue, EnvironmentError> {
+        let ancestor_env = self.ancestor(distance);
+        let values_map = ancestor_env.borrow().values.clone();
+
+        match values_map.get(&name.lexeme) {
+            Some(value) => Ok(value.clone()),
+            None => Err(EnvironmentError::UndefinedVariable(format!(
+                "Undefined variable '{}'.",
+                name
+            ))),
+        }
+    }
+
+    pub fn ancestor(&self, distance: usize) -> Rc<RefCell<Environment>> {
+        if distance == 0 {
+            Rc::new(RefCell::new(self.clone()))
+        } else {
+            match &self.enclosing {
+                Some(enclosing_env) => enclosing_env.borrow().ancestor(distance - 1),
+                None => panic!("No enclosing environment found at distance {}", distance),
+            }
+        }
+    }
+
     pub fn assign(&mut self, name: &Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
         if self.values.contains_key(&name.lexeme) {
             self.values.insert(name.lexeme.clone(), value.clone());
@@ -73,6 +97,24 @@ impl Environment {
             }
         }
     }
+
+    pub fn assign_at(
+        &mut self,
+        distance: usize,
+        name: &Token,
+        value: LoxValue,
+    ) -> Result<LoxValue, EnvironmentError> {
+        let ancestor_env = self.ancestor(distance);
+        let mut values_map = ancestor_env.borrow().values.clone();
+
+        match values_map.insert(name.lexeme.clone(), value) {
+            Some(value) => Ok(value.clone()),
+            None => Err(EnvironmentError::UndefinedVariable(format!(
+                "Undefined variable '{}'.",
+                name.lexeme
+            ))),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -86,7 +128,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "x".to_string(),
-            Literal::Num(10.0),
+            Literal::Num(10.0.into()),
             1,
         );
         let value = LoxValue::Number(10.0);
@@ -111,7 +153,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "z".to_string(),
-            Literal::Num(10.0),
+            Literal::Num(10.0.into()),
             1,
         );
         env.define("z".to_string(), LoxValue::Number(10.0));
@@ -127,7 +169,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "w".to_string(),
-            Literal::Num(20.0),
+            Literal::Num(20.0.into()),
             1,
         );
         let value = LoxValue::Number(20.0);
@@ -143,7 +185,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "var".to_string(),
-            Literal::Num(100.0),
+            Literal::Num(100.0.into()),
             1,
         );
         let value = LoxValue::Number(100.0);
@@ -159,7 +201,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "var".to_string(),
-            Literal::Num(100.0),
+            Literal::Num(100.0.into()),
             1,
         );
         outer

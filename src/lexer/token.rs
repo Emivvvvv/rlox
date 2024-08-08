@@ -1,6 +1,7 @@
-use core::fmt;
+use std::fmt;
+use std::hash::{Hash, Hasher};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -50,16 +51,55 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
+pub struct Hf64(f64);
+
+impl PartialEq for Hf64 {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 || (self.0.is_nan() && other.0.is_nan())
+    }
+}
+
+impl Eq for Hf64 {}
+
+impl Hash for Hf64 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if self.0.is_nan() {
+            state.write_u8(0);
+        } else {
+            state.write_u64(self.0.to_bits());
+        }
+    }
+}
+
+impl From<f64> for Hf64 {
+    fn from(value: f64) -> Self {
+        Hf64(value)
+    }
+}
+
+impl Into<f64> for Hf64 {
+    fn into(self) -> f64 {
+        self.0
+    }
+}
+
+impl fmt::Display for Hf64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Literal {
     Str(String),
-    Num(f64),
+    Num(Hf64),
     True,
     False,
     Nil,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,

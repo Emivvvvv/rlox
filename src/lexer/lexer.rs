@@ -210,7 +210,7 @@ impl Lexer {
 
         let num_str = self.source[self.start..self.current].to_string();
         match num_str.parse::<f64>() {
-            Ok(num) => self.add_token(TokenType::Number, Literal::Num(num)),
+            Ok(num) => self.add_token(TokenType::Number, Literal::Num(num.into())),
             Err(e) => report(
                 self.line,
                 &num_str,

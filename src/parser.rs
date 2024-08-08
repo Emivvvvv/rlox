@@ -548,9 +548,19 @@ mod tests {
     #[test]
     fn test_basic_expression() {
         let tokens = vec![
-            Token::new(TokenType::Number, "123".to_string(), Literal::Num(123.0), 1),
+            Token::new(
+                TokenType::Number,
+                "123".to_string(),
+                Literal::Num(123.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "456".to_string(), Literal::Num(456.0), 1),
+            Token::new(
+                TokenType::Number,
+                "456".to_string(),
+                Literal::Num(456.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -563,9 +573,19 @@ mod tests {
     #[test]
     fn test_error_handling_missing_semicolon() {
         let tokens = vec![
-            Token::new(TokenType::Number, "123".to_string(), Literal::Num(123.0), 1),
+            Token::new(
+                TokenType::Number,
+                "123".to_string(),
+                Literal::Num(123.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "456".to_string(), Literal::Num(456.0), 1),
+            Token::new(
+                TokenType::Number,
+                "456".to_string(),
+                Literal::Num(456.0.into()),
+                1,
+            ),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1), // No semicolon before EOF
         ];
         let mut parser = Parser::new(tokens);
@@ -577,7 +597,12 @@ mod tests {
     fn test_unary_expression() {
         let tokens = vec![
             Token::new(TokenType::Minus, "-".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "123".to_string(), Literal::Num(123.0), 1),
+            Token::new(
+                TokenType::Number,
+                "123".to_string(),
+                Literal::Num(123.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -596,7 +621,12 @@ mod tests {
     fn test_grouping_expression() {
         let tokens = vec![
             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "123".to_string(), Literal::Num(123.0), 1),
+            Token::new(
+                TokenType::Number,
+                "123".to_string(),
+                Literal::Num(123.0.into()),
+                1,
+            ),
             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
@@ -615,8 +645,18 @@ mod tests {
     #[test]
     fn test_unexpected_token_error() {
         let tokens = vec![
-            Token::new(TokenType::Number, "123".to_string(), Literal::Num(123.0), 1),
-            Token::new(TokenType::Number, "456".to_string(), Literal::Num(456.0), 1), // Unexpected token
+            Token::new(
+                TokenType::Number,
+                "123".to_string(),
+                Literal::Num(123.0.into()),
+                1,
+            ),
+            Token::new(
+                TokenType::Number,
+                "456".to_string(),
+                Literal::Num(456.0.into()),
+                1,
+            ), // Unexpected token
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -628,11 +668,26 @@ mod tests {
     #[test]
     fn test_binary_expression_precedence() {
         let tokens = vec![
-            Token::new(TokenType::Number, "1".to_string(), Literal::Num(1.0), 1),
+            Token::new(
+                TokenType::Number,
+                "1".to_string(),
+                Literal::Num(1.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(2.0), 1),
+            Token::new(
+                TokenType::Number,
+                "2".to_string(),
+                Literal::Num(2.0.into()),
+                1,
+            ),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(3.0), 1),
+            Token::new(
+                TokenType::Number,
+                "3".to_string(),
+                Literal::Num(3.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];

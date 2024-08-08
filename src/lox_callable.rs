@@ -1,5 +1,6 @@
-use crate::interpreter::{Interpreter, LoxValue, RuntimeError};
 use core::fmt;
+
+use crate::interpreter::{Interpreter, LoxValue, RuntimeError};
 
 pub trait LoxCallable {
     fn arity(&self) -> usize;
