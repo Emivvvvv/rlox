@@ -38,7 +38,7 @@ impl Lexer {
     }
 
     fn is_at_end(&self) -> bool {
-        &self.current >= &self.source.len()
+        self.current >= self.source.len()
     }
 
     fn scan_token(&mut self) {
@@ -97,7 +97,7 @@ impl Lexer {
                     self.add_token(TokenType::Slash, Literal::Nil);
                 }
             }
-            ' ' | '\r' | '\t' => return,
+            ' ' | '\r' | '\t' => (),
             '\n' => self.line += 1,
             '"' => self.string(),
             '0'..='9' => self.number(),
@@ -193,17 +193,17 @@ impl Lexer {
     }
 
     fn number(&mut self) {
-        while self.peek().is_digit(10) {
+        while self.peek().is_ascii_digit() {
             self.advance();
         }
 
         // Check for a fractional part
-        if self.peek() == '.' && self.peek_next().is_digit(10) {
+        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
             // Advance over the '.'
             self.advance();
 
             // Continue with the fractional part
-            while self.peek().is_digit(10) {
+            while self.peek().is_ascii_digit() {
                 self.advance();
             }
         }

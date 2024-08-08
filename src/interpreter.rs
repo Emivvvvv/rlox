@@ -91,7 +91,7 @@ impl LoxValue {
             return LoxValue::Boolean(bool);
         }
 
-        return LoxValue::Boolean(true);
+        LoxValue::Boolean(true)
     }
 
     fn math_if_num(self, other: Self, opeator: TokenType) -> Result<Self, LoxValueError> {
@@ -145,13 +145,13 @@ impl LoxValue {
         }
     }
 
-    fn is_equal(self, other: Self) -> Self {
+    fn is_equal(&self, other: Self) -> Self {
         let bool_value = match (self, other) {
             (LoxValue::Boolean(left_bool), LoxValue::Boolean(right_bool)) => {
-                left_bool == right_bool
+                *left_bool == right_bool
             }
-            (LoxValue::String(left_str), LoxValue::String(right_str)) => left_str == right_str,
-            (LoxValue::Number(left_num), LoxValue::Number(right_num)) => left_num == right_num,
+            (LoxValue::String(left_str), LoxValue::String(right_str)) => *left_str == right_str,
+            (LoxValue::Number(left_num), LoxValue::Number(right_num)) => *left_num == right_num,
             (LoxValue::Nil, LoxValue::Nil) => true,
             _ => false,
         };
@@ -164,7 +164,7 @@ impl From<&Literal> for LoxValue {
     fn from(literal: &Literal) -> Self {
         match literal {
             Literal::Str(str) => Self::String(str.clone()),
-            Literal::Num(num) => Self::Number(num.clone().into()),
+            Literal::Num(num) => Self::Number(num.0),
             Literal::Nil => Self::Nil,
             Literal::True => Self::Boolean(true),
             Literal::False => Self::Boolean(false),
@@ -358,13 +358,11 @@ impl Interpreter {
                 .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e)),
             TokenType::Plus => match (&left, &right) {
                 (LoxValue::String(left_str), LoxValue::String(right_str)) => {
-                    return Ok(LoxValue::String(left_str.clone() + right_str));
+                    Ok(LoxValue::String(left_str.clone() + right_str))
                 }
-                (LoxValue::Number(_), LoxValue::Number(_)) => {
-                    return left
-                        .math_if_num(right, TokenType::Plus)
-                        .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e));
-                }
+                (LoxValue::Number(_), LoxValue::Number(_)) => left
+                    .math_if_num(right, TokenType::Plus)
+                    .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e)),
                 _ => Ok(LoxValue::String(format!("{left}{right}"))),
             },
             TokenType::Greater
@@ -389,12 +387,10 @@ impl Interpreter {
         let right = self.evaluate(right)?;
 
         match operator.token_type {
-            TokenType::Bang => return Ok(right.is_truthy()),
-            TokenType::Minus => {
-                return right
-                    .negate_if_num()
-                    .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e))
-            }
+            TokenType::Bang => Ok(right.is_truthy()),
+            TokenType::Minus => right
+                .negate_if_num()
+                .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e)),
             _ => Err(RuntimeError::InterpreterPanic(
                 operator.clone(),
                 "Invalid token type for evaluating unarys.".to_string(),
@@ -590,13 +586,13 @@ impl Interpreter {
     pub fn interpret_function_stmt(
         &mut self,
         name: &Token,
-        params: &Vec<Token>,
-        body: &Vec<Stmt>,
+        params: &[Token],
+        body: &[Stmt],
     ) -> Result<LoxValue, RuntimeError> {
         let function = LoxFunction::new(
             name.clone(),
-            params.clone(),
-            body.clone(),
+            params.to_vec(),
+            body.to_owned(),
             Rc::clone(&self.environment),
         );
 
@@ -619,6 +615,12 @@ impl Interpreter {
             None => LoxValue::Nil,
         };
         Err(RuntimeError::Return(value))
+    }
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

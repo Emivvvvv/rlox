@@ -36,9 +36,9 @@ pub enum Stmt {
     },
 }
 
-impl Into<Option<Expr>> for Stmt {
-    fn into(self) -> Option<Expr> {
-        match self {
+impl From<Stmt> for Option<Expr> {
+    fn from(val: Stmt) -> Self {
+        match val {
             Stmt::Expression { expression } | Stmt::Print { expression } => Some(expression),
             Stmt::Var {
                 name: _,

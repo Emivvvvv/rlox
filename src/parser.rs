@@ -456,11 +456,11 @@ impl Parser {
         }
 
         let paren = self.consume(TokenType::RightParen, "Expect ')' after arguments.")?;
-        return Ok(Expr::Call {
+        Ok(Expr::Call {
             callee: Box::new(callee),
             paren,
             arguments,
-        });
+        })
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
@@ -515,7 +515,7 @@ impl Parser {
 
     fn error(&self, token: Token, message: &str) -> ParseError {
         lox::error(token, message);
-        return ParseError;
+        ParseError
     }
 
     fn synchronize(&mut self) {

@@ -86,15 +86,13 @@ impl Environment {
         if self.values.contains_key(&name.lexeme) {
             self.values.insert(name.lexeme.clone(), value.clone());
             Ok(value)
+        } else if let Some(enclosing) = &self.enclosing {
+            enclosing.borrow_mut().assign(name, value)
         } else {
-            if let Some(enclosing) = &self.enclosing {
-                enclosing.borrow_mut().assign(name, value)
-            } else {
-                Err(EnvironmentError::UndefinedVariable(format!(
-                    "Undefined variable '{}'.",
-                    name.lexeme
-                )))
-            }
+            Err(EnvironmentError::UndefinedVariable(format!(
+                "Undefined variable '{}'.",
+                name.lexeme
+            )))
         }
     }
 
@@ -114,6 +112,12 @@ impl Environment {
                 name.lexeme
             ))),
         }
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -26,7 +26,7 @@ impl Resolvable for Expr {
                 right,
             } => resolver.binary_expr(left, operator, right),
             Expr::Grouping { expression } => resolver.grouping_expr(expression),
-            Expr::Literal { value: _value } => return,
+            Expr::Literal { value: _value } => (),
             Expr::Unary { operator, right } => resolver.unary_expr(operator, right),
             Expr::Variable { name } => resolver.variable_expr(name),
             Expr::Assign { name, value } => resolver.assign_expr(name, value),
@@ -246,7 +246,7 @@ impl Resolver {
         if !self.scopes.is_empty() {
             if let Some(scope) = self.scopes.last() {
                 if let Some(&value) = scope.get(&name.lexeme) {
-                    if value == false {
+                    if !value {
                         lox::error(
                             name.clone(),
                             "Can't read local variable in its own initializer.",
@@ -258,12 +258,12 @@ impl Resolver {
         self.resolve_local(&Expr::Variable { name: name.clone() }, name);
     }
 
-    fn assign_expr(&mut self, name: &Token, value: &Box<Expr>) {
-        self.resolve(&**value);
+    fn assign_expr(&mut self, name: &Token, value: &Expr) {
+        self.resolve(value);
         self.resolve_local(
             &Expr::Assign {
                 name: name.clone(),
-                value: value.clone(),
+                value: Box::new(value.clone()),
             },
             name,
         )

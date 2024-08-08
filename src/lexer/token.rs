@@ -52,7 +52,7 @@ pub enum TokenType {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct Hf64(f64);
+pub struct Hf64(pub f64);
 
 impl PartialEq for Hf64 {
     fn eq(&self, other: &Self) -> bool {
@@ -78,9 +78,9 @@ impl From<f64> for Hf64 {
     }
 }
 
-impl Into<f64> for Hf64 {
-    fn into(self) -> f64 {
-        self.0
+impl From<Hf64> for f64 {
+    fn from(val: Hf64) -> Self {
+        val.0
     }
 }
 
