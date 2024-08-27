@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-
 use crate::expr::Expr;
 use crate::interpreter::Interpreter;
 use crate::lexer::token::Token;
@@ -119,6 +118,26 @@ impl Resolver {
             None => return
         }
     }
+
+    fn resolve_local(&self, expr: &Expr, name: &Token) {
+        for i in (0..self.scopes.len()).rev() {
+            if let Some(scope) = self.scopes.get(i) {
+                if scope.contains_key(&name.lexeme.clone()) {
+                    self.interpreter.borrow_mut().resolve(expr, self.scopes.len() - 1 - i)
+                }
+            }
+        }
+    }
+
+    fn resolve_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+        self.begin_scope();
+        for param in params {
+            self.declare(param);
+            self.define(param);
+        }
+        self.resolve_array(body);
+        self.end_scope()
+    }
 }
 
 impl Resolver {
@@ -139,9 +158,80 @@ impl Resolver {
     pub fn variable_expr(&mut self, name: &Token) {
         let scope = self.scopes.last_mut();
         if let Some(scope) = scope {
-            if !scope.get(&name.lexeme.clone()) {
-                lox::error(name.clone(), "Can't read local variable in its own initializer.")
+            if let Some(bool) = scope.get(&name.lexeme.clone()) {
+                if !bool {
+                    lox::error(name.clone(), "Can't read local variable in its own initializer.")
+                }
             }
         }
+
+        let expr = Expr::Variable {name: name.clone()};
+        self.resolve_local(&expr,  name)
+    }
+
+    pub fn assign_expr(&mut self, name: &Token, value: &Expr) {
+        self.resolve(value);
+
+        let expr = Expr::Assign {name: name.clone(), value: Box::new(value.clone())};
+        self.resolve_local(&expr,  name)
+    }
+
+    pub fn function_stmt(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+        self.declare(name);
+        self.define(name);
+        self.resolve_function(name, params, body);
+    }
+
+    fn expression_stmt(&mut self, expression: &Expr) {
+        self.resolve(expression)
+    }
+
+    fn if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>) {
+        self.resolve(condition);
+        self.resolve(then_branch);
+        if let Some(else_branch) = else_branch {
+            self.resolve(else_branch)
+        }
+    }
+
+    fn print_stmt(&mut self, expression: &Expr) {
+        self.resolve(expression)
+    }
+
+    fn return_stmt(&mut self, keyword: &Token, value: &Option<Expr>) {
+        if let Some(value) = value {
+            self.resolve(value)
+        }
+    }
+
+    fn while_stmt(&mut self, condition: &Expr, body: &Stmt) {
+        self.resolve(condition);
+        self.resolve(body);
+    }
+
+    fn binary_expr(&mut self, left: &Expr, _operator: &Token, right: &Expr) {
+        self.resolve(left);
+        self.resolve(right);
+    }
+
+    fn call_expr(&mut self, callee: &Expr, _paren: &Token, arguments: &Vec<Expr>) {
+        self.resolve(callee);
+
+        for argument in arguments {
+            self.resolve(argument)
+        }
+    }
+
+    fn grouping_expr(&mut self, expression: &Expr) {
+        self.resolve( expression)
+    }
+
+    fn logical_expr(&mut self, left: &Expr, _operator: &Token, right: &Expr) {
+        self.resolve(left);
+        self.resolve(right);
+    }
+
+    fn unary_expr(&mut self, _operator: &Token, right: &Expr) {
+        self.resolve(right);
     }
 }

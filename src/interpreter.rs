@@ -324,6 +324,8 @@ impl Interpreter {
         }
     }
 
+    pub(crate) fn resolve(&self, expr: &Expr, dimention: usize) {}
+
     fn evaluate(&mut self, evaluable: &dyn Evaluable) -> Result<LoxValue, RuntimeError> {
         evaluable.evaluate(self)
     }
@@ -350,9 +352,9 @@ impl Interpreter {
                     return Ok(LoxValue::String(left_str.clone() + right_str));
                 }
                 (LoxValue::Number(_), LoxValue::Number(_)) => {
-                    return left
+                    left
                         .math_if_num(right, TokenType::Plus)
-                        .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e));
+                        .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e))
                 }
                 _ => Ok(LoxValue::String(format!("{left}{right}"))),
             },
