@@ -8,3 +8,4 @@ pub mod lox_callable;
 pub mod lox_function;
 pub mod parser;
 pub mod stmt;
+pub mod resolver;
