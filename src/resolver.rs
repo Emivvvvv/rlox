@@ -77,15 +77,14 @@ pub struct Resolver {
 
 impl Resolver {
     pub fn new(interpreter: Rc<RefCell<Interpreter>>) -> Self {
-        let hmap: HashMap<String, bool> = HashMap::new();
         Resolver {
             interpreter,
-            scopes: vec![hmap],
+            scopes: vec![],
             current_function: FunctionType::None,
         }
     }
 
-    pub fn resolve_vec(&mut self, statements: &Vec<Stmt>) {
+    pub fn resolve_vec(&mut self, statements: &[Stmt]) {
         for statement in statements {
             self.resolve(statement);
         }
@@ -104,10 +103,6 @@ impl Resolver {
     }
 
     fn declare(&mut self, name: &Token) {
-        if self.scopes.is_empty() {
-            return;
-        }
-
         if let Some(scope) = self.scopes.last_mut() {
             if scope.contains_key(&name.lexeme) {
                 lox::error(
@@ -121,10 +116,6 @@ impl Resolver {
     }
 
     fn define(&mut self, name: &Token) {
-        if self.scopes.is_empty() {
-            return;
-        }
-
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(name.lexeme.clone(), true); // True indicates the variable is fully initialized
         }
@@ -132,6 +123,7 @@ impl Resolver {
 
     fn resolve_local(&mut self, expr: &Expr, name: &Token) {
         for (i, scope) in self.scopes.iter().enumerate().rev() {
+            println!("{i}");
             if scope.contains_key(&name.lexeme) {
                 self.interpreter
                     .borrow_mut()
@@ -164,7 +156,7 @@ impl Resolver {
 }
 
 impl Resolver {
-    fn block_stmt(&mut self, statements: &Vec<Stmt>) {
+    fn block_stmt(&mut self, statements: &[Stmt]) {
         self.begin_scope();
         self.resolve_vec(statements);
         self.end_scope();
@@ -267,5 +259,161 @@ impl Resolver {
             },
             name,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::token::{Literal, TokenType};
+
+    #[test]
+    fn test_declare_variable() {
+        let interpreter = Rc::new(RefCell::new(Interpreter::new()));
+        let mut resolver = Resolver::new(interpreter);
+
+        let token = Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1);
+
+        // Begin a new scope
+        resolver.begin_scope();
+
+        // Declare a variable
+        resolver.declare(&token);
+
+        // Check that the variable is declared but not yet defined
+        println!("{:?}", resolver.scopes); // Debugging information
+        assert_eq!(
+            resolver.scopes.last().unwrap().get(&"a".to_string()),
+            Some(&false)
+        );
+
+        // Declare the same variable again to trigger an error
+        resolver.declare(&token);
+
+        // The error should be caught, but let's ensure the scope is still correct
+        println!("{:?}", resolver.scopes); // Debugging information
+        assert_eq!(
+            resolver.scopes.last().unwrap().get(&"a".to_string()),
+            Some(&false)
+        );
+
+        // End the scope
+        resolver.end_scope();
+    }
+
+    #[test]
+    fn test_define_variable() {
+        let interpreter = Rc::new(RefCell::new(Interpreter::new()));
+        let mut resolver = Resolver::new(interpreter);
+
+        let token = Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1);
+
+        resolver.declare(&token);
+        resolver.define(&token);
+
+        println!("{:?}", resolver.scopes); // Debugging information
+        assert_eq!(
+            resolver.scopes.last().unwrap().get(&"a".to_string()),
+            Some(&true)
+        );
+
+        resolver.end_scope();
+    }
+
+    #[test]
+    fn test_resolve_local_with_shadowing() {
+        let interpreter = Interpreter::new();
+        let mut resolver = Resolver::new(Rc::new(RefCell::new(interpreter)));
+
+        // Define a variable in the global scope
+        let global_scope = vec![Stmt::Var {
+            name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+            initializer: Some(Expr::Literal {
+                value: Literal::Str("global".to_string()),
+            }),
+        }];
+        resolver.resolve_vec(&global_scope);
+
+        // Define a block with a shadowed variable
+        let block_scope = vec![Stmt::Block {
+            statements: vec![
+                Stmt::Var {
+                    name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+                    initializer: Some(Expr::Literal {
+                        value: Literal::Str("block".to_string()),
+                    }),
+                },
+                Stmt::Expression {
+                    expression: Expr::Variable {
+                        name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+                    },
+                },
+            ],
+        }];
+        resolver.resolve_vec(&block_scope);
+
+        // Ensure that the inner 'a' resolves to distance 0 (local block scope)
+        assert_eq!(resolver.interpreter.borrow().locals.len(), 2);
+        assert_eq!(
+            resolver.interpreter.borrow().locals.get(&Expr::Variable {
+                name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+            }),
+            Some(&0)
+        );
+
+        // Ensure that the outer 'a' resolves to distance 1 (global scope)
+        resolver.resolve_vec(&vec![Stmt::Expression {
+            expression: Expr::Variable {
+                name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+            },
+        }]);
+        assert_eq!(
+            resolver.interpreter.borrow().locals.get(&Expr::Variable {
+                name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+            }),
+            Some(&1)
+        );
+    }
+
+    #[test]
+    fn test_resolve_local_correct_distance() {
+        let interpreter = Interpreter::new();
+        let mut resolver = Resolver::new(Rc::new(RefCell::new(interpreter)));
+
+        let global_scope = vec![Stmt::Var {
+            name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+            initializer: Some(Expr::Literal {
+                value: Literal::Str("global".to_string()),
+            }),
+        }];
+
+        resolver.resolve_vec(&global_scope);
+
+        let local_scope = vec![Stmt::Block {
+            statements: vec![
+                Stmt::Var {
+                    name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+                    initializer: Some(Expr::Literal {
+                        value: Literal::Str("local".to_string()),
+                    }),
+                },
+                Stmt::Expression {
+                    expression: Expr::Variable {
+                        name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+                    },
+                },
+            ],
+        }];
+
+        resolver.resolve_vec(&local_scope);
+
+        // 'a' inside the block should resolve to distance 0 (local scope)
+        assert_eq!(resolver.interpreter.borrow().locals.len(), 2);
+        assert_eq!(
+            resolver.interpreter.borrow().locals.get(&Expr::Variable {
+                name: Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1),
+            }),
+            Some(&0)
+        );
     }
 }

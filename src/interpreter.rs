@@ -20,6 +20,7 @@ pub enum RuntimeError {
     InterpreterPanic(Token, String),
     DivideByZero(Token, LoxValueError),
     UndefinedVariable(Token, EnvironmentError),
+    Input(String),
     Return(LoxValue),
 }
 
@@ -285,7 +286,7 @@ impl Evaluable for Stmt {
 pub struct Interpreter {
     globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
-    locals: HashMap<Expr, usize>,
+    pub locals: HashMap<Expr, usize>,
 }
 
 impl Interpreter {
@@ -399,28 +400,63 @@ impl Interpreter {
     }
 
     fn evaluate_variable(&mut self, name: &Token) -> Result<LoxValue, RuntimeError> {
+        println!("[evaluate_variable] Evaluating variable '{}'", name.lexeme);
         self.look_up_variable(name)
     }
 
     fn look_up_variable(&mut self, name: &Token) -> Result<LoxValue, RuntimeError> {
+        println!("[look_up_variable] Looking up variable '{}'", name.lexeme);
+
         let distance_option = self.locals.get(&Expr::Variable { name: name.clone() });
 
         match distance_option {
-            Some(distance) => self
-                .environment
-                .borrow_mut()
-                .get_at(*distance, name)
-                .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
-            None => self
-                .globals
-                .borrow_mut()
-                .get(name)
-                .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+            Some(distance) => {
+                println!(
+                    "[look_up_variable] Variable '{}' found at distance {}, retrieving value",
+                    name.lexeme, distance
+                );
+                let env = self.environment.borrow();
+                let env_ptr = Rc::as_ptr(&self.environment) as usize;
+                println!("[look_up_variable] Current environment: 0x{:x}", env_ptr);
+                let value = env
+                    .get_at(*distance, name)
+                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
+                println!(
+                    "[look_up_variable] Value found for '{}': {:?} in environment 0x{:x}",
+                    name.lexeme, value, env_ptr
+                );
+                Ok(value)
+            }
+            None => {
+                println!(
+                    "[look_up_variable] Variable '{}' not found in local scope, checking globals",
+                    name.lexeme
+                );
+                let value = self
+                    .globals
+                    .borrow()
+                    .get(name)
+                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
+                println!(
+                    "[look_up_variable] Value found in globals for '{}': {:?}",
+                    name.lexeme, value
+                );
+                Ok(value)
+            }
         }
     }
 
     fn evaluate_assign(&mut self, name: &Token, expr: &Expr) -> Result<LoxValue, RuntimeError> {
+        println!(
+            "[evaluate_assign] Evaluating assignment to variable '{}'",
+            name.lexeme
+        );
+
         let value = self.evaluate(expr)?;
+        println!(
+            "[evaluate_assign] Computed value for '{}': {:?}",
+            name.lexeme, value
+        );
 
         let distance_option = self.locals.get(&Expr::Assign {
             name: name.clone(),
@@ -428,16 +464,38 @@ impl Interpreter {
         });
 
         match distance_option {
-            Some(distance) => self
-                .environment
-                .borrow_mut()
-                .assign_at(*distance, name, value)
-                .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
-            None => self
-                .globals
-                .borrow_mut()
-                .assign(name, value)
-                .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+            Some(distance) => {
+                println!(
+                    "[evaluate_assign] Variable '{}' found at distance {}, assigning value: {:?}",
+                    name.lexeme, distance, value
+                );
+                let result = self
+                    .environment
+                    .borrow_mut()
+                    .assign_at(*distance, name, value.clone())
+                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
+                println!(
+                    "[evaluate_assign] Value assigned to '{}' at distance {}: {:?}",
+                    name.lexeme, distance, result
+                );
+                Ok(result)
+            }
+            None => {
+                println!(
+                    "[evaluate_assign] Variable '{}' not found in local scope, assigning in globals: {:?}",
+                    name.lexeme, value
+                );
+                let result = self
+                    .globals
+                    .borrow_mut()
+                    .assign(name, value.clone())
+                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
+                println!(
+                    "[evaluate_assign] Value assigned to '{}' in globals: {:?}",
+                    name.lexeme, result
+                );
+                Ok(result)
+            }
         }
     }
 
@@ -519,10 +577,7 @@ impl Interpreter {
             value = Some(self.evaluate(expr)?);
         }
 
-        let final_value = match value {
-            Some(lox_value) => lox_value,
-            None => LoxValue::Nil,
-        };
+        let final_value = value.unwrap_or_else(|| LoxValue::Nil);
 
         self.environment
             .borrow_mut()
@@ -939,5 +994,105 @@ mod interpreter_tests {
         } else {
             panic!("Expected a number from clock function");
         }
+    }
+
+    #[test]
+    fn test_evaluate_block_stmt_environment_reversion() {
+        let mut interpreter = Interpreter::new();
+        let global_env = interpreter.get_globals();
+
+        // Define a variable in the global scope
+        global_env
+            .borrow_mut()
+            .define("x".to_string(), LoxValue::Number(10.0));
+
+        // Block that defines a new variable and should revert to the global environment
+        let block_statements = vec![Stmt::Var {
+            name: Token::new(TokenType::Identifier, "y".to_string(), Literal::Nil, 1),
+            initializer: Some(Expr::Literal {
+                value: Literal::Num(20.0.into()),
+            }),
+        }];
+
+        interpreter
+            .evaluate_block_stmt(&block_statements, None)
+            .unwrap();
+
+        // Ensure that 'x' still exists in the global environment after block execution
+        assert_eq!(
+            global_env.borrow().get(&Token::new(
+                TokenType::Identifier,
+                "x".to_string(),
+                Literal::Nil,
+                1
+            )),
+            Ok(LoxValue::Number(10.0))
+        );
+
+        // Ensure that 'y' is not accessible outside the block (since it's local to the block)
+        assert!(global_env
+            .borrow()
+            .get(&Token::new(
+                TokenType::Identifier,
+                "y".to_string(),
+                Literal::Nil,
+                1
+            ))
+            .is_err());
+    }
+
+    #[test]
+    fn test_evaluate_assign_correct_environment() {
+        let mut interpreter = Interpreter::new();
+        let global_env = interpreter.get_globals();
+
+        // Define variable 'a' in global scope
+        global_env
+            .borrow_mut()
+            .define("a".to_string(), LoxValue::String("first".to_string()));
+
+        // Assign new value to 'a'
+        let name = Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1);
+        let value = Box::new(Expr::Literal {
+            value: Literal::Str("second".to_string()),
+        });
+
+        interpreter.evaluate_assign(&name, &value).unwrap();
+
+        // Ensure 'a' was updated in the global scope
+        assert_eq!(
+            global_env.borrow().get(&name),
+            Ok(LoxValue::String("second".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_scope_management() {
+        let mut interpreter = Interpreter::new();
+
+        // Begin a new scope
+        interpreter
+            .evaluate_block_stmt(
+                &[Stmt::Var {
+                    name: Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
+                    initializer: Some(Expr::Literal {
+                        value: Literal::Num(10.0.into()),
+                    }),
+                }],
+                None,
+            )
+            .unwrap();
+
+        // Ensure 'x' is not accessible after the scope ends
+        assert!(interpreter
+            .get_globals()
+            .borrow()
+            .get(&Token::new(
+                TokenType::Identifier,
+                "x".to_string(),
+                Literal::Nil,
+                1
+            ))
+            .is_err());
     }
 }
