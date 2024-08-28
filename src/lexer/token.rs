@@ -1,6 +1,9 @@
-use core::fmt;
+use std::fmt;
+use std::hash::Hash;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -15,7 +18,7 @@ pub enum TokenType {
     Slash,
     Star,
 
-    // One or two caharacter tokens.
+    // One or two character tokens.
     Bang,
     BangEqual,
     Equal,
@@ -50,16 +53,43 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Eq, Hash, PartialEq, Copy, Clone)]
+pub struct Hf64(pub Decimal);
+
+impl From<f64> for Hf64 {
+    fn from(value: f64) -> Self {
+        Hf64(Decimal::from_f64(value).unwrap())
+    }
+}
+
+impl From<Hf64> for f64 {
+    fn from(val: Hf64) -> Self {
+        val.0.to_f64().unwrap()
+    }
+}
+
+impl From<&Hf64> for f64 {
+    fn from(val: &Hf64) -> Self {
+        val.0.to_f64().unwrap()
+    }
+}
+
+impl fmt::Display for Hf64 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum Literal {
     Str(String),
-    Num(f64),
+    Num(Hf64),
     True,
     False,
     Nil,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,

@@ -9,6 +9,7 @@ use crate::lox_callable::LoxCallable;
 use crate::lox_function::LoxFunction;
 use crate::stmt::Stmt;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -18,6 +19,7 @@ pub enum RuntimeError {
     InterpreterPanic(Token, String),
     DivideByZero(Token, LoxValueError),
     UndefinedVariable(Token, EnvironmentError),
+    AssignVariableError(Token, EnvironmentError),
     Return(LoxValue),
 }
 
@@ -83,19 +85,19 @@ impl LoxValue {
 
     fn is_truthy(&self) -> Self {
         if self == &LoxValue::Nil {
-            return LoxValue::Boolean(false);
+            return LoxValue::Boolean(false)
         }
         if let &LoxValue::Boolean(bool) = self {
-            return LoxValue::Boolean(bool);
+            return LoxValue::Boolean(bool)
         }
 
-        return LoxValue::Boolean(true);
+        LoxValue::Boolean(true)
     }
 
-    fn math_if_num(self, other: Self, opeator: TokenType) -> Result<Self, LoxValueError> {
+    fn math_if_num(self, other: Self, operator: TokenType) -> Result<Self, LoxValueError> {
         match (self, other) {
             (LoxValue::Number(left_num), LoxValue::Number(right_num)) => {
-                let result = match opeator {
+                let result = match operator {
                     TokenType::Plus => left_num + right_num,
                     TokenType::Minus => left_num - right_num,
                     TokenType::Slash => {
@@ -162,7 +164,7 @@ impl From<&Literal> for LoxValue {
     fn from(literal: &Literal) -> Self {
         match literal {
             Literal::Str(str) => Self::String(str.clone()),
-            Literal::Num(num) => Self::Number(num.clone()),
+            Literal::Num(num) => Self::Number(f64::from(num)),
             Literal::Nil => Self::Nil,
             Literal::True => Self::Boolean(true),
             Literal::False => Self::Boolean(false),
@@ -279,9 +281,11 @@ impl Evaluable for Stmt {
     }
 }
 
+#[derive(Debug)]
 pub struct Interpreter {
     globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
+    locals: HashMap<Expr, usize>,
 }
 
 impl Interpreter {
@@ -296,6 +300,7 @@ impl Interpreter {
         Self {
             globals,
             environment,
+            locals: HashMap::new(),
         }
     }
 
@@ -324,7 +329,9 @@ impl Interpreter {
         }
     }
 
-    pub(crate) fn resolve(&self, expr: &Expr, dimention: usize) {}
+    pub fn resolve(&mut self, expr: &Expr, depth: usize) {
+        self.locals.insert(expr.clone(), depth);
+    }
 
     fn evaluate(&mut self, evaluable: &dyn Evaluable) -> Result<LoxValue, RuntimeError> {
         evaluable.evaluate(self)
@@ -349,7 +356,7 @@ impl Interpreter {
                 .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e)),
             TokenType::Plus => match (&left, &right) {
                 (LoxValue::String(left_str), LoxValue::String(right_str)) => {
-                    return Ok(LoxValue::String(left_str.clone() + right_str));
+                    Ok(LoxValue::String(left_str.clone() + right_str))
                 }
                 (LoxValue::Number(_), LoxValue::Number(_)) => {
                     left
@@ -371,7 +378,7 @@ impl Interpreter {
             TokenType::EqualEqual => Ok(left.is_equal(right)),
             _ => Err(RuntimeError::InterpreterPanic(
                 operator.clone(),
-                "Invalid token type for evaluating binarys.".to_string(),
+                "Invalid token type for evaluating binary's.".to_string(),
             )),
         }
     }
@@ -380,15 +387,15 @@ impl Interpreter {
         let right = self.evaluate(right)?;
 
         match operator.token_type {
-            TokenType::Bang => return Ok(right.is_truthy()),
+            TokenType::Bang => Ok(right.is_truthy()),
             TokenType::Minus => {
-                return right
+                right
                     .negate_if_num()
                     .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e))
             }
             _ => Err(RuntimeError::InterpreterPanic(
                 operator.clone(),
-                "Invalid token type for evaluating unarys.".to_string(),
+                "Invalid token type for evaluating unary.".to_string(),
             )),
         }
     }
@@ -400,14 +407,20 @@ impl Interpreter {
             .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
     }
 
+    fn look_up_variable(&mut self, name: &Token, expr: Expr) -> Result<LoxValue, RuntimeError> {
+        match self.locals.get(&expr) {
+            Some(distance) => self.environment.borrow_mut().get_at(*distance, &name.lexeme).map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+            None => self.globals.borrow_mut().get(name).map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+        }
+    }
+
     fn evaluate_assign(&mut self, name: &Token, expr: &Expr) -> Result<LoxValue, RuntimeError> {
         let value = self.evaluate(expr)?;
-        self.environment
-            .borrow_mut()
-            .assign(name, value.clone())
-            .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
 
-        Ok(value)
+        match self.locals.get(&expr) {
+            Some(distance) => self.environment.borrow_mut().assign_at(*distance, name.clone(), value.clone()).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e)),
+            None => self.globals.borrow_mut().assign(name, value.clone()).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e)),
+        }
     }
 
     pub fn evaluate_logical(
@@ -589,17 +602,18 @@ impl Interpreter {
 
 #[cfg(test)]
 mod interpreter_tests {
+    use crate::lexer::token::Hf64;
     use super::*;
     use crate::parser::Parser;
 
     #[test]
     fn test_arithmetic_expression() {
         let tokens = vec![
-            Token::new(TokenType::Number, "1".to_string(), Literal::Num(1.0), 1),
+            Token::new(TokenType::Number, "1".to_string(), Literal::Num(Hf64::from(1.0)), 1),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(2.0), 1),
+            Token::new(TokenType::Number, "2".to_string(), Literal::Num(Hf64::from(2.0)), 1),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(3.0), 1),
+            Token::new(TokenType::Number, "3".to_string(), Literal::Num(Hf64::from(3.0)), 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -629,9 +643,9 @@ mod interpreter_tests {
     #[should_panic]
     fn test_division_by_zero() {
         let tokens = vec![
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(10.0), 1),
+            Token::new(TokenType::Number, "10".to_string(), Literal::Num(Hf64::from(10.0)), 1),
             Token::new(TokenType::Slash, "/".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "0".to_string(), Literal::Num(0.0), 1),
+            Token::new(TokenType::Number, "0".to_string(), Literal::Num(Hf64::from(0.0)), 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -671,12 +685,12 @@ mod interpreter_tests {
     fn test_grouping_and_precedence() {
         let tokens = vec![
             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "1".to_string(), Literal::Num(1.0), 1),
+            Token::new(TokenType::Number, "1".to_string(), Literal::Num(Hf64::from(1.0)), 1),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(2.0), 1),
+            Token::new(TokenType::Number, "2".to_string(), Literal::Num(Hf64::from(2.0)), 1),
             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(3.0), 1),
+            Token::new(TokenType::Number, "3".to_string(), Literal::Num(Hf64::from(3.0)), 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -713,12 +727,12 @@ mod interpreter_tests {
         let tokens = vec![
             Token::new(TokenType::Print, "print".to_string(), Literal::Nil, 1),
             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(2.0), 1),
+            Token::new(TokenType::Number, "2".to_string(), Literal::Num(Hf64::from(2.0)), 1),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(3.0), 1),
+            Token::new(TokenType::Number, "3".to_string(), Literal::Num(Hf64::from(3.0)), 1),
             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "4".to_string(), Literal::Num(4.0), 1),
+            Token::new(TokenType::Number, "4".to_string(), Literal::Num(Hf64::from(4.0)), 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -738,7 +752,7 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(10.0), 1),
+            Token::new(TokenType::Number, "10".to_string(), Literal::Num(Hf64::from(10.0)), 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
@@ -758,13 +772,13 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(10.0), 1),
+            Token::new(TokenType::Number, "10".to_string(), Literal::Num(Hf64::from(10.0)), 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::LeftBrace, "{".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "y".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "5".to_string(), Literal::Num(5.0), 1),
+            Token::new(TokenType::Number, "5".to_string(), Literal::Num(Hf64::from(5.0)), 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
@@ -793,7 +807,7 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "number".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "42".to_string(), Literal::Num(42.0), 1),
+            Token::new(TokenType::Number, "42".to_string(), Literal::Num(Hf64::from(42.0)), 1),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),

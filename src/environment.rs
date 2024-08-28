@@ -7,12 +7,14 @@ use crate::{interpreter::LoxValue, lexer::token::Token};
 #[derive(Debug)]
 pub enum EnvironmentError {
     UndefinedVariable(String),
+    AssignVariableError(String)
 }
 
 impl EnvironmentError {
     pub fn get_string(self) -> String {
         match self {
             EnvironmentError::UndefinedVariable(err_str) => err_str,
+            EnvironmentError::AssignVariableError(err_str) => err_str,
         }
     }
 }
@@ -73,12 +75,63 @@ impl Environment {
             }
         }
     }
+
+    pub fn get_at(&mut self, distance: usize, name: &String) -> Result<LoxValue, EnvironmentError> {
+        match self.ancestor(distance)?.borrow_mut().values.get(name) {
+            Some(value) => Ok(value.clone()),
+            None => Err(EnvironmentError::UndefinedVariable(format!(
+                "Undefined variable '{}' at distance '{}'.",
+                name,
+                distance
+            )))
+        }
+    }
+    
+    pub fn assign_at(&mut self, distance: usize, name: Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
+        let binding = self.ancestor(distance)?;
+        let ancestor_values = &mut binding.borrow_mut().values;
+        match ancestor_values.insert(name.lexeme.clone(), value) {
+            Some(value) => Ok(value),
+            None => Err(EnvironmentError::AssignVariableError(format!(
+                "Couldn't assign variable '{}' at distance '{}'.",
+                name,
+                distance,
+            )))
+        }
+    }
+
+    pub fn ancestor(&self, distance: usize) -> Result<Rc<RefCell<Environment>>, EnvironmentError> {
+        let mut environment = match &self.enclosing {
+            Some(enclosing) => Rc::clone(enclosing),
+            None => {
+                return Err(EnvironmentError::UndefinedVariable(format!(
+                    "No enclosing environment found at distance {}.",
+                    distance
+                )));
+            }
+        };
+
+        for _ in 1..distance {
+            let next_environment = match &environment.borrow().enclosing {
+                Some(enclosing) => Rc::clone(enclosing),
+                None => {
+                    return Err(EnvironmentError::UndefinedVariable(format!(
+                        "No enclosing environment found at distance {}.",
+                        distance
+                    )))
+                }
+            };
+            environment = next_environment;
+        }
+
+        Ok(environment)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::token::{Literal, TokenType};
+    use crate::lexer::token::{Hf64, Literal, TokenType};
 
     #[test]
     fn test_define_and_get() {
@@ -86,7 +139,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "x".to_string(),
-            Literal::Num(10.0),
+            Literal::Num(Hf64::from(10.0)),
             1,
         );
         let value = LoxValue::Number(10.0);
@@ -111,7 +164,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "z".to_string(),
-            Literal::Num(10.0),
+            Literal::Num(Hf64::from(10.0)),
             1,
         );
         env.define("z".to_string(), LoxValue::Number(10.0));
@@ -127,7 +180,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "w".to_string(),
-            Literal::Num(20.0),
+            Literal::Num(Hf64::from(20.0)),
             1,
         );
         let value = LoxValue::Number(20.0);
@@ -143,7 +196,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "var".to_string(),
-            Literal::Num(100.0),
+            Literal::Num(Hf64::from(100.0)),
             1,
         );
         let value = LoxValue::Number(100.0);
@@ -159,7 +212,7 @@ mod tests {
         let token = Token::new(
             TokenType::Identifier,
             "var".to_string(),
-            Literal::Num(100.0),
+            Literal::Num(Hf64::from(100.0)),
             1,
         );
         outer

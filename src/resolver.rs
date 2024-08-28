@@ -71,6 +71,7 @@ enum FunctionType {
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
     scopes: Vec<HashMap<String, bool>>,
+    current_function: FunctionType,
 }
 
 impl Resolver {
@@ -78,6 +79,7 @@ impl Resolver {
         Resolver {
             interpreter,
             scopes: Vec::new(),
+            current_function: FunctionType::None,
         }
     }
 
@@ -101,11 +103,11 @@ impl Resolver {
 
     fn declare(&mut self, name: &Token) {
         let scope = self.scopes.last_mut();
-        match scope {
-            Some(scope) => {
-                scope.insert(name.lexeme.clone(), false);
+        if let Some(scope) = scope {
+            if scope.contains_key(&name.lexeme) {
+                lox::error(name, "Already a variable with this name in this scope.");
             }
-            None => return
+            scope.insert(name.lexeme.clone(), false);
         }
     }
 
@@ -129,14 +131,19 @@ impl Resolver {
         }
     }
 
-    fn resolve_function(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+    fn resolve_function(&mut self, _name: &Token, params: &[Token], body: &[Stmt], function_type: FunctionType) {
+        let enclosing_function = self.current_function;
+        self.current_function = function_type;
+
         self.begin_scope();
         for param in params {
             self.declare(param);
             self.define(param);
         }
         self.resolve_array(body);
-        self.end_scope()
+        self.end_scope();
+
+        self.current_function = enclosing_function;
     }
 }
 
@@ -160,7 +167,7 @@ impl Resolver {
         if let Some(scope) = scope {
             if let Some(bool) = scope.get(&name.lexeme.clone()) {
                 if !bool {
-                    lox::error(name.clone(), "Can't read local variable in its own initializer.")
+                    lox::error(name, "Can't read local variable in its own initializer.")
                 }
             }
         }
@@ -179,7 +186,7 @@ impl Resolver {
     pub fn function_stmt(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
         self.declare(name);
         self.define(name);
-        self.resolve_function(name, params, body);
+        self.resolve_function(name, params, body, FunctionType::Function);
     }
 
     fn expression_stmt(&mut self, expression: &Expr) {
@@ -190,7 +197,7 @@ impl Resolver {
         self.resolve(condition);
         self.resolve(then_branch);
         if let Some(else_branch) = else_branch {
-            self.resolve(else_branch)
+            self.resolve(&**else_branch)
         }
     }
 
@@ -199,6 +206,9 @@ impl Resolver {
     }
 
     fn return_stmt(&mut self, keyword: &Token, value: &Option<Expr>) {
+        if self.current_function == FunctionType::None {
+            lox::error(keyword, "Can't return from top-level code.");
+        }
         if let Some(value) = value {
             self.resolve(value)
         }

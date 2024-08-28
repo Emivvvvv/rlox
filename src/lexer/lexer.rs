@@ -1,4 +1,4 @@
-use crate::lexer::token::{Token, TokenType};
+use crate::lexer::token::{Hf64, Token, TokenType};
 use crate::lox::report;
 
 use super::token::Literal;
@@ -210,7 +210,7 @@ impl Lexer {
 
         let num_str = self.source[self.start..self.current].to_string();
         match num_str.parse::<f64>() {
-            Ok(num) => self.add_token(TokenType::Number, Literal::Num(num)),
+            Ok(num) => self.add_token(TokenType::Number, Literal::Num(Hf64::from(num))),
             Err(e) => report(
                 self.line,
                 &num_str,

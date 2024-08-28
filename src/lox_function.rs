@@ -45,7 +45,7 @@ impl LoxCallable for LoxFunction {
     }
 
     fn arity(&self) -> usize {
-        return self.params.len();
+        self.params.len()
     }
 
     fn get_name(&self) -> &str {
