@@ -10,6 +10,6 @@ Rust implementation of the jlox interpreter from the second chapter of "Crafting
 |  Statements and State  |   ✅    |
 |      Control Flow      |   ✅    |
 |       Functions        |   ✅    |
-| Resolving and Binding  |   ⏳    |
+| Resolving and Binding  |   ✅    |
 |        Classes         |   ⏳    |
 |      Inheritance       |   ⏳    |
