@@ -1,4 +1,4 @@
-use crate::lexer::token::{Token, TokenType};
+use crate::lexer::token::{Hf64, Token, TokenType};
 use crate::lox::report;
 
 use super::token::Literal;
@@ -38,7 +38,7 @@ impl Lexer {
     }
 
     fn is_at_end(&self) -> bool {
-        self.current >= self.source.len()
+        &self.current >= &self.source.len()
     }
 
     fn scan_token(&mut self) {
@@ -97,7 +97,7 @@ impl Lexer {
                     self.add_token(TokenType::Slash, Literal::Nil);
                 }
             }
-            ' ' | '\r' | '\t' => (),
+            ' ' | '\r' | '\t' => return,
             '\n' => self.line += 1,
             '"' => self.string(),
             '0'..='9' => self.number(),
@@ -193,24 +193,24 @@ impl Lexer {
     }
 
     fn number(&mut self) {
-        while self.peek().is_ascii_digit() {
+        while self.peek().is_digit(10) {
             self.advance();
         }
 
         // Check for a fractional part
-        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+        if self.peek() == '.' && self.peek_next().is_digit(10) {
             // Advance over the '.'
             self.advance();
 
             // Continue with the fractional part
-            while self.peek().is_ascii_digit() {
+            while self.peek().is_digit(10) {
                 self.advance();
             }
         }
 
         let num_str = self.source[self.start..self.current].to_string();
         match num_str.parse::<f64>() {
-            Ok(num) => self.add_token(TokenType::Number, Literal::Num(num.into())),
+            Ok(num) => self.add_token(TokenType::Number, Literal::Num(Hf64::from(num))),
             Err(e) => report(
                 self.line,
                 &num_str,

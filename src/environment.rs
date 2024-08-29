@@ -7,35 +7,37 @@ use crate::{interpreter::LoxValue, lexer::token::Token};
 #[derive(Debug, PartialEq)]
 pub enum EnvironmentError {
     UndefinedVariable(String),
+    AssignVariableError(String)
 }
 
 impl EnvironmentError {
     pub fn get_string(self) -> String {
         match self {
             EnvironmentError::UndefinedVariable(err_str) => err_str,
+            EnvironmentError::AssignVariableError(err_str) => err_str,
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Environment {
     values: HashMap<String, LoxValue>,
     enclosing: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {
-    pub fn new() -> Self {
-        Self {
-            values: HashMap::<String, LoxValue>::new(),
+    pub fn new() -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            values: HashMap::new(),
             enclosing: None,
-        }
+        }))
     }
 
-    pub fn with_enclosing(enclosing: Rc<RefCell<Environment>>) -> Self {
-        Self {
-            values: HashMap::<String, LoxValue>::new(),
+    pub fn with_enclosing(enclosing: Rc<RefCell<Environment>>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            values: HashMap::new(),
             enclosing: Some(enclosing),
-        }
+        }))
     }
 
     pub fn define(&mut self, name: String, value: LoxValue) -> Option<LoxValue> {
@@ -58,83 +60,74 @@ impl Environment {
         }
     }
 
-    pub fn get_at(&self, distance: usize, name: &Token) -> Result<LoxValue, EnvironmentError> {
-        let ancestor_env = self.ancestor(distance);
-        let values_map = ancestor_env.borrow().values.clone();
-
-        match values_map.get(&name.lexeme) {
-            Some(value) => Ok(value.clone()),
-            None => Err(EnvironmentError::UndefinedVariable(format!(
-                "Undefined variable '{}'.",
-                name
-            ))),
-        }
-    }
-
-    pub fn ancestor(&self, distance: usize) -> Rc<RefCell<Environment>> {
-        let mut environment = Rc::new(RefCell::new(self.clone())); // Wrap `self` into an Rc<RefCell>
-
-        for _ in 0..distance {
-            let enclosing_env = {
-                let borrowed_env = environment.borrow();
-                match &borrowed_env.enclosing {
-                    Some(enclosing_env) => Rc::clone(enclosing_env), // Move to the next environment
-                    None => panic!("No enclosing environment found at distance {}", distance),
-                }
-            };
-            environment = enclosing_env;
-        }
-
-        environment
-    }
-
     pub fn assign(&mut self, name: &Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
         if self.values.contains_key(&name.lexeme) {
             self.values.insert(name.lexeme.clone(), value.clone());
             Ok(value)
-        } else if let Some(enclosing) = &self.enclosing {
-            enclosing.borrow_mut().assign(name, value)
         } else {
-            Err(EnvironmentError::UndefinedVariable(format!(
-                "Undefined variable '{}'.",
-                name.lexeme
-            )))
+            if let Some(enclosing) = &self.enclosing {
+                enclosing.borrow_mut().assign(name, value)
+            } else {
+                Err(EnvironmentError::UndefinedVariable(format!(
+                    "Undefined variable '{}'.",
+                    name.lexeme
+                )))
+            }
         }
     }
 
-    pub fn assign_at(
-        &mut self,
-        distance: usize,
-        name: &Token,
-        value: LoxValue,
-    ) -> Result<LoxValue, EnvironmentError> {
-        let ancestor_env = self.ancestor(distance);
-        let mut env = ancestor_env.borrow_mut(); // Borrow the environment mutably
+    pub fn get_at(env: Rc<RefCell<Environment>>, distance: usize, name: &String) -> Result<LoxValue, EnvironmentError> {
+        let ancestor_env = Environment::ancestor(env, distance);
+        let value = ancestor_env.borrow().values.get(name).cloned();
 
-        println!(
-            "[assign_at] Environment at distance {}: 0x{:x}",
-            distance,
-            Rc::as_ptr(&ancestor_env) as usize
-        );
-        println!("[assign_at] Before assignment: {:?}", env.values);
-
-        match env.values.get_mut(&name.lexeme) {
-            Some(existing_value) => {
-                *existing_value = value.clone();
-                println!("[assign_at] After assignment: {:?}", env.values);
-                Ok(value)
-            }
+        match value {
+            Some(val) => Ok(val),
             None => Err(EnvironmentError::UndefinedVariable(format!(
-                "Undefined variable '{}'.",
-                name.lexeme
+                "Undefined variable '{}' at distance '{}'.",
+                name, distance
             ))),
         }
     }
-}
 
-impl Default for Environment {
-    fn default() -> Self {
-        Self::new()
+
+    pub fn assign_at(
+        env: Rc<RefCell<Environment>>,
+        distance: usize,
+        name: &Token,
+        value: LoxValue
+    ) -> Result<LoxValue, EnvironmentError> {
+        let binding = Environment::ancestor(env.clone(), distance);
+        let mut ancestor_env = binding.borrow_mut();
+
+        match ancestor_env.values.insert(name.lexeme.clone(), value) {
+            Some(previous_value) => {
+                Ok(previous_value)
+            },
+            None => {
+                Err(EnvironmentError::AssignVariableError(format!(
+                    "Couldn't assign variable '{}' at distance '{}'.",
+                    name.lexeme, distance,
+                )))
+            }
+        }
+    }
+
+
+    pub fn ancestor(env: Rc<RefCell<Environment>>, distance: usize) -> Rc<RefCell<Environment>> {
+        if distance == 0 {
+            env
+        } else if distance == 1 {
+            Rc::clone(&env.borrow().enclosing.as_ref().expect("No enclosing environment"))
+        } else {
+            let mut environment = Rc::clone(&env.borrow().enclosing.as_ref().expect("No enclosing environment"));
+
+            for _ in 1..distance {
+                let parent = environment.borrow().enclosing.clone();
+                environment = parent.expect("Ancestor not found.");
+            }
+
+            environment
+        }
     }
 }
 
@@ -145,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_define_and_get() {
-        let mut env = Environment::new();
+        let env = Environment::new();
         let token = Token::new(
             TokenType::Identifier,
             "x".to_string(),
@@ -153,9 +146,9 @@ mod tests {
             1,
         );
         let value = LoxValue::Number(10.0);
-        env.define("x".to_string(), value.clone());
+        env.borrow_mut().define("x".to_string(), value.clone());
 
-        assert_eq!(env.get(&token).unwrap(), value);
+        assert_eq!(env.borrow().get(&token).unwrap(), value);
     }
 
     #[test]
@@ -164,29 +157,29 @@ mod tests {
         let token = Token::new(TokenType::Identifier, "y".to_string(), Literal::Nil, 1);
 
         assert!(
-            matches!(env.get(&token), Err(EnvironmentError::UndefinedVariable(err)) if err == "Undefined variable 'y'.")
+            matches!(env.borrow().get(&token), Err(EnvironmentError::UndefinedVariable(err)) if err == "Undefined variable 'y'.")
         );
     }
 
     #[test]
     fn test_assign_existing_variable() {
-        let mut env = Environment::new();
+        let env = Environment::new();
         let token = Token::new(
             TokenType::Identifier,
             "z".to_string(),
             Literal::Num(10.0.into()),
             1,
         );
-        env.define("z".to_string(), LoxValue::Number(10.0));
+        env.borrow_mut().define("z".to_string(), LoxValue::Number(10.0));
 
         let new_value = LoxValue::Number(20.0);
-        env.assign(&token, new_value.clone()).unwrap();
-        assert_eq!(env.get(&token).unwrap(), new_value);
+        env.borrow_mut().assign(&token, new_value.clone()).unwrap();
+        assert_eq!(env.borrow().get(&token).unwrap(), new_value);
     }
 
     #[test]
     fn test_enclosing_environment() {
-        let outer = Rc::new(RefCell::new(Environment::new()));
+        let outer = Environment::new();
         let token = Token::new(
             TokenType::Identifier,
             "var".to_string(),
@@ -196,40 +189,37 @@ mod tests {
         let value = LoxValue::Number(100.0);
         outer.borrow_mut().define("var".to_string(), value.clone());
 
-        let inner = Environment::with_enclosing(outer);
-        assert_eq!(inner.get(&token).unwrap(), value);
+        let inner = Environment::with_enclosing(Rc::clone(&outer));
+        assert_eq!(inner.borrow().get(&token).unwrap(), value);
     }
 
     #[test]
     fn test_shadowing_by_inner_environment() {
-        let outer = Rc::new(RefCell::new(Environment::new()));
+        let outer = Environment::new();
         let token = Token::new(
             TokenType::Identifier,
             "var".to_string(),
             Literal::Num(100.0.into()),
             1,
         );
-        outer
-            .borrow_mut()
-            .define("var".to_string(), LoxValue::Number(100.0));
+        outer.borrow_mut().define("var".to_string(), LoxValue::Number(100.0));
 
-        let mut inner = Environment::with_enclosing(outer);
+        let inner = Environment::with_enclosing(Rc::clone(&outer));
         let inner_value = LoxValue::Number(200.0);
-        inner.define("var".to_string(), inner_value.clone());
+        inner.borrow_mut().define("var".to_string(), inner_value.clone());
 
-        assert_eq!(inner.get(&token).unwrap(), inner_value);
+        assert_eq!(inner.borrow().get(&token).unwrap(), inner_value);
     }
 
     #[test]
     fn test_assign_in_nested_environment() {
-        let outer = Rc::new(RefCell::new(Environment::new()));
-        outer
-            .borrow_mut()
-            .define("x".to_string(), LoxValue::Number(10.0));
+        let outer = Environment::new();
+        outer.borrow_mut().define("x".to_string(), LoxValue::Number(10.0));
 
-        let mut inner = Environment::with_enclosing(outer);
+        let inner = Environment::with_enclosing(Rc::clone(&outer));
         assert_eq!(
             inner
+                .borrow_mut()
                 .assign(
                     &Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
                     LoxValue::Number(20.0)
@@ -238,13 +228,12 @@ mod tests {
             LoxValue::Number(20.0)
         );
         assert_eq!(
-            inner
-                .get(&Token::new(
-                    TokenType::Identifier,
-                    "x".to_string(),
-                    Literal::Nil,
-                    1
-                ))
+            inner.borrow().get(&Token::new(
+                TokenType::Identifier,
+                "x".to_string(),
+                Literal::Nil,
+                1
+            ))
                 .unwrap(),
             LoxValue::Number(20.0)
         );
@@ -252,13 +241,13 @@ mod tests {
 
     #[test]
     fn test_assign_undefined_variable() {
-        let mut env = Environment::new();
+        let env = Environment::new();
 
         let token = Token::new(TokenType::Identifier, "w".to_string(), Literal::Nil, 1);
 
         let value = LoxValue::Number(31.0);
 
-        let result = env.assign(&token, value);
+        let result = env.borrow_mut().assign(&token, value);
 
         assert!(
             matches!(result, Err(EnvironmentError::UndefinedVariable(ref err)) if err == "Undefined variable 'w'."),
@@ -269,13 +258,9 @@ mod tests {
 
     #[test]
     fn test_ancestor_retrieval() {
-        let global_env = Rc::new(RefCell::new(Environment::new()));
-        let first_child_env = Rc::new(RefCell::new(Environment::with_enclosing(Rc::clone(
-            &global_env,
-        ))));
-        let second_child_env = Rc::new(RefCell::new(Environment::with_enclosing(Rc::clone(
-            &first_child_env,
-        ))));
+        let global_env = Environment::new();
+        let first_child_env = Environment::with_enclosing(Rc::clone(&global_env));
+        let second_child_env = Environment::with_enclosing(Rc::clone(&first_child_env));
 
         // Define variables at different levels
         global_env
@@ -290,9 +275,7 @@ mod tests {
         );
 
         assert_eq!(
-            second_child_env
-                .borrow()
-                .ancestor(0)
+            Environment::ancestor(Rc::clone(&second_child_env), 0)
                 .borrow()
                 .get(&Token::new(
                     TokenType::Identifier,
@@ -304,9 +287,7 @@ mod tests {
         );
 
         assert_eq!(
-            second_child_env
-                .borrow()
-                .ancestor(1)
+            Environment::ancestor(Rc::clone(&second_child_env), 1)
                 .borrow()
                 .get(&Token::new(
                     TokenType::Identifier,
@@ -318,9 +299,7 @@ mod tests {
         );
 
         assert_eq!(
-            second_child_env
-                .borrow()
-                .ancestor(2)
+            Environment::ancestor(Rc::clone(&second_child_env), 2)
                 .borrow()
                 .get(&Token::new(
                     TokenType::Identifier,
@@ -334,8 +313,8 @@ mod tests {
 
     #[test]
     fn test_assign_existing_global_variable() {
-        let global_env = Rc::new(RefCell::new(Environment::new()));
-        let mut child_env = Environment::with_enclosing(Rc::clone(&global_env));
+        let global_env = Environment::new();
+        let child_env = Environment::with_enclosing(Rc::clone(&global_env));
 
         // Define a variable in the global environment
         global_env.borrow_mut().define(
@@ -351,18 +330,18 @@ mod tests {
             1,
         );
         let new_value = LoxValue::String("updated".to_string());
-        let result = child_env.assign(&token, new_value.clone());
+        let result = child_env.borrow_mut().assign(&token, new_value.clone());
 
         // Ensure assignment succeeded and the global variable was updated
         assert!(result.is_ok());
-        assert_eq!(child_env.get(&token).unwrap(), new_value);
+        assert_eq!(child_env.borrow().get(&token).unwrap(), new_value);
         assert_eq!(global_env.borrow().get(&token).unwrap(), new_value);
     }
 
     #[test]
     fn test_assign_nonexistent_variable_should_error() {
-        let global_env = Rc::new(RefCell::new(Environment::new()));
-        let mut child_env = Environment::with_enclosing(Rc::clone(&global_env));
+        let global_env = Environment::new();
+        let child_env = Environment::with_enclosing(Rc::clone(&global_env));
 
         // Attempt to assign to a variable that doesn't exist
         let token = Token::new(
@@ -372,7 +351,7 @@ mod tests {
             1,
         );
         let value = LoxValue::String("value".to_string());
-        let result = child_env.assign(&token, value);
+        let result = child_env.borrow_mut().assign(&token, value);
 
         // Ensure that the assignment failed with the correct error
         assert!(
@@ -382,11 +361,9 @@ mod tests {
 
     #[test]
     fn test_ancestor_at_various_distances() {
-        let global_env = Rc::new(RefCell::new(Environment::new()));
-        let first_child_env = Rc::new(RefCell::new(Environment::with_enclosing(Rc::clone(
-            &global_env,
-        ))));
-        let mut second_child_env = Environment::with_enclosing(first_child_env.clone());
+        let global_env = Environment::new();
+        let first_child_env = Environment::with_enclosing(Rc::clone(&global_env));
+        let second_child_env = Environment::with_enclosing(Rc::clone(&first_child_env));
 
         // Define variables in different levels
         global_env.borrow_mut().define(
@@ -397,51 +374,56 @@ mod tests {
             "var_first_child".to_string(),
             LoxValue::String("first_child".to_string()),
         );
-        second_child_env.define(
+        second_child_env.borrow_mut().define(
             "var_second_child".to_string(),
             LoxValue::String("second_child".to_string()),
         );
 
         // Test ancestor at distance 0 (current environment)
         assert_eq!(
-            second_child_env.ancestor(0).borrow().get(&Token::new(
-                TokenType::Identifier,
-                "var_second_child".to_string(),
-                Literal::Nil,
-                1
-            )),
+            Environment::ancestor(Rc::clone(&second_child_env), 0)
+                .borrow()
+                .get(&Token::new(
+                    TokenType::Identifier,
+                    "var_second_child".to_string(),
+                    Literal::Nil,
+                    1
+                )),
             Ok(LoxValue::String("second_child".to_string()))
         );
 
         // Test ancestor at distance 1 (first child environment)
         assert_eq!(
-            second_child_env.ancestor(1).borrow().get(&Token::new(
-                TokenType::Identifier,
-                "var_first_child".to_string(),
-                Literal::Nil,
-                1
-            )),
+            Environment::ancestor(Rc::clone(&second_child_env), 1)
+                .borrow()
+                .get(&Token::new(
+                    TokenType::Identifier,
+                    "var_first_child".to_string(),
+                    Literal::Nil,
+                    1
+                )),
             Ok(LoxValue::String("first_child".to_string()))
         );
 
         // Test ancestor at distance 2 (global environment)
         assert_eq!(
-            second_child_env.ancestor(2).borrow().get(&Token::new(
-                TokenType::Identifier,
-                "var_global".to_string(),
-                Literal::Nil,
-                1
-            )),
+            Environment::ancestor(Rc::clone(&second_child_env), 2)
+                .borrow()
+                .get(&Token::new(
+                    TokenType::Identifier,
+                    "var_global".to_string(),
+                    Literal::Nil,
+                    1
+                )),
             Ok(LoxValue::String("global".to_string()))
         );
     }
 
     #[test]
     fn test_assign_at_non_existent_variable_should_error() {
-        let global_env = Rc::new(RefCell::new(Environment::new()));
+        let global_env = Environment::new();
         let first_child_env = Environment::with_enclosing(Rc::clone(&global_env));
-        let mut second_child_env =
-            Environment::with_enclosing(Rc::new(RefCell::new(first_child_env.clone())));
+        let second_child_env = Environment::with_enclosing(Rc::clone(&first_child_env));
 
         let token = Token::new(
             TokenType::Identifier,
@@ -452,28 +434,25 @@ mod tests {
         let value = LoxValue::Number(30.0);
 
         // Attempt to assign to 'z' at a distance of 1, which doesn't exist
-        let result = second_child_env.assign_at(1, &token, value);
+        let result = Environment::assign_at(Rc::clone(&second_child_env), 1, &token, value);
 
-        // Ensure that an error is returned, indicating the variable is undefined
-        assert!(
-            matches!(result, Err(EnvironmentError::UndefinedVariable(ref err)) if err == "Undefined variable 'z'."),
-            "Expected UndefinedVariable error, but got: {:?}",
-            result
-        );
+        // Ensure that an error is returned, indicating the variable could not be assigned
+        let expected_error = Err(EnvironmentError::AssignVariableError("Couldn't assign variable 'z' at distance '1'.".to_string()));
+        assert_eq!(result, expected_error)
     }
+
 
     #[test]
     fn test_assign_at_correct_distance() {
-        let global_env = Rc::new(RefCell::new(Environment::new()));
+        let global_env = Environment::new();
         global_env
             .borrow_mut()
             .define("x".to_string(), LoxValue::Number(10.0));
 
-        let mut first_child_env = Environment::with_enclosing(Rc::clone(&global_env));
-        first_child_env.define("y".to_string(), LoxValue::Number(20.0));
+        let first_child_env = Environment::with_enclosing(Rc::clone(&global_env));
+        first_child_env.borrow_mut().define("y".to_string(), LoxValue::Number(20.0));
 
-        let mut second_child_env =
-            Environment::with_enclosing(Rc::new(RefCell::new(first_child_env.clone())));
+        let second_child_env = Environment::with_enclosing(Rc::clone(&first_child_env));
 
         let token = Token::new(
             TokenType::Identifier,
@@ -483,10 +462,10 @@ mod tests {
         );
 
         // Assign to 'x' at a distance of 2 (global scope)
-        let result = second_child_env.assign_at(2, &token, LoxValue::Number(30.0));
+        let result = Environment::assign_at(Rc::clone(&second_child_env), 2, &token, LoxValue::Number(30.0));
 
         // Ensure the assignment was successful
-        assert_eq!(result, Ok(LoxValue::Number(30.0))); // This should match the new value
+        assert_eq!(result, Ok(LoxValue::Number(10.0))); // This should match the old value.
 
         // Check that the value in the global environment was updated
         assert_eq!(global_env.borrow().get(&token), Ok(LoxValue::Number(30.0)));

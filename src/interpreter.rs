@@ -1,8 +1,3 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fmt;
-use std::rc::Rc;
-
 use crate::environment::{Environment, EnvironmentError};
 use crate::expr::Expr;
 use crate::globals::define_globals;
@@ -14,13 +9,18 @@ use crate::lox_callable::LoxCallable;
 use crate::lox_function::LoxFunction;
 use crate::stmt::Stmt;
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt;
+use std::rc::Rc;
+
 #[derive(Debug)]
 pub enum RuntimeError {
     IncorrectOperand(Token, LoxValueError),
     InterpreterPanic(Token, String),
     DivideByZero(Token, LoxValueError),
     UndefinedVariable(Token, EnvironmentError),
-    Input(String),
+    AssignVariableError(Token, EnvironmentError),
     Return(LoxValue),
 }
 
@@ -86,19 +86,19 @@ impl LoxValue {
 
     fn is_truthy(&self) -> Self {
         if self == &LoxValue::Nil {
-            return LoxValue::Boolean(false);
+            return LoxValue::Boolean(false)
         }
         if let &LoxValue::Boolean(bool) = self {
-            return LoxValue::Boolean(bool);
+            return LoxValue::Boolean(bool)
         }
 
         LoxValue::Boolean(true)
     }
 
-    fn math_if_num(self, other: Self, opeator: TokenType) -> Result<Self, LoxValueError> {
+    fn math_if_num(self, other: Self, operator: TokenType) -> Result<Self, LoxValueError> {
         match (self, other) {
             (LoxValue::Number(left_num), LoxValue::Number(right_num)) => {
-                let result = match opeator {
+                let result = match operator {
                     TokenType::Plus => left_num + right_num,
                     TokenType::Minus => left_num - right_num,
                     TokenType::Slash => {
@@ -146,13 +146,13 @@ impl LoxValue {
         }
     }
 
-    fn is_equal(&self, other: Self) -> Self {
+    fn is_equal(self, other: Self) -> Self {
         let bool_value = match (self, other) {
             (LoxValue::Boolean(left_bool), LoxValue::Boolean(right_bool)) => {
-                *left_bool == right_bool
+                left_bool == right_bool
             }
-            (LoxValue::String(left_str), LoxValue::String(right_str)) => *left_str == right_str,
-            (LoxValue::Number(left_num), LoxValue::Number(right_num)) => *left_num == right_num,
+            (LoxValue::String(left_str), LoxValue::String(right_str)) => left_str == right_str,
+            (LoxValue::Number(left_num), LoxValue::Number(right_num)) => left_num == right_num,
             (LoxValue::Nil, LoxValue::Nil) => true,
             _ => false,
         };
@@ -165,7 +165,7 @@ impl From<&Literal> for LoxValue {
     fn from(literal: &Literal) -> Self {
         match literal {
             Literal::Str(str) => Self::String(str.clone()),
-            Literal::Num(num) => Self::Number(num.0),
+            Literal::Num(num) => Self::Number(f64::from(num)),
             Literal::Nil => Self::Nil,
             Literal::True => Self::Boolean(true),
             Literal::False => Self::Boolean(false),
@@ -286,24 +286,22 @@ impl Evaluable for Stmt {
 pub struct Interpreter {
     globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
-    pub locals: HashMap<Expr, usize>,
+    locals: HashMap<Expr, usize>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         // Create a new global environment
-        let globals = Rc::new(RefCell::new(Environment::new()));
+        let globals = Environment::new();
         define_globals(&globals);
 
         // Initially, the environment is the global environment
         let environment = Rc::clone(&globals);
 
-        let locals = HashMap::new();
-
         Self {
             globals,
             environment,
-            locals,
+            locals: HashMap::new(),
         }
     }
 
@@ -332,8 +330,8 @@ impl Interpreter {
         }
     }
 
-    pub fn resolve(&mut self, expr: Expr, depth: usize) {
-        self.locals.insert(expr, depth);
+    pub fn resolve(&mut self, expr: &Expr, depth: usize) {
+        self.locals.insert(expr.clone(), depth);
     }
 
     fn evaluate(&mut self, evaluable: &dyn Evaluable) -> Result<LoxValue, RuntimeError> {
@@ -361,9 +359,11 @@ impl Interpreter {
                 (LoxValue::String(left_str), LoxValue::String(right_str)) => {
                     Ok(LoxValue::String(left_str.clone() + right_str))
                 }
-                (LoxValue::Number(_), LoxValue::Number(_)) => left
-                    .math_if_num(right, TokenType::Plus)
-                    .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e)),
+                (LoxValue::Number(_), LoxValue::Number(_)) => {
+                    left
+                        .math_if_num(right, TokenType::Plus)
+                        .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e))
+                }
                 _ => Ok(LoxValue::String(format!("{left}{right}"))),
             },
             TokenType::Greater
@@ -379,7 +379,7 @@ impl Interpreter {
             TokenType::EqualEqual => Ok(left.is_equal(right)),
             _ => Err(RuntimeError::InterpreterPanic(
                 operator.clone(),
-                "Invalid token type for evaluating binarys.".to_string(),
+                "Invalid token type for evaluating binary's.".to_string(),
             )),
         }
     }
@@ -389,113 +389,51 @@ impl Interpreter {
 
         match operator.token_type {
             TokenType::Bang => Ok(right.is_truthy()),
-            TokenType::Minus => right
-                .negate_if_num()
-                .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e)),
+            TokenType::Minus => {
+                right
+                    .negate_if_num()
+                    .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e))
+            }
             _ => Err(RuntimeError::InterpreterPanic(
                 operator.clone(),
-                "Invalid token type for evaluating unarys.".to_string(),
+                "Invalid token type for evaluating unary.".to_string(),
             )),
         }
     }
 
     fn evaluate_variable(&mut self, name: &Token) -> Result<LoxValue, RuntimeError> {
-        println!("[evaluate_variable] Evaluating variable '{}'", name.lexeme);
-        self.look_up_variable(name)
+        self.look_up_variable(name, Expr::Variable { name: name.clone() })
     }
 
-    fn look_up_variable(&mut self, name: &Token) -> Result<LoxValue, RuntimeError> {
-        println!("[look_up_variable] Looking up variable '{}'", name.lexeme);
-
-        let distance_option = self.locals.get(&Expr::Variable { name: name.clone() });
-
-        match distance_option {
+    fn look_up_variable(&mut self, name: &Token, expr: Expr) -> Result<LoxValue, RuntimeError> {
+        match self.locals.get(&expr) {
             Some(distance) => {
-                println!(
-                    "[look_up_variable] Variable '{}' found at distance {}, retrieving value",
-                    name.lexeme, distance
-                );
-                let env = self.environment.borrow();
-                let env_ptr = Rc::as_ptr(&self.environment) as usize;
-                println!("[look_up_variable] Current environment: 0x{:x}", env_ptr);
-                let value = env
-                    .get_at(*distance, name)
-                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
-                println!(
-                    "[look_up_variable] Value found for '{}': {:?} in environment 0x{:x}",
-                    name.lexeme, value, env_ptr
-                );
-                Ok(value)
-            }
+                // Call get_at with the environment wrapped in Rc<RefCell<Environment>>
+                Environment::get_at(Rc::clone(&self.environment), *distance, &name.lexeme)
+                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
+            },
             None => {
-                println!(
-                    "[look_up_variable] Variable '{}' not found in local scope, checking globals",
-                    name.lexeme
-                );
-                let value = self
-                    .globals
-                    .borrow()
-                    .get(name)
-                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
-                println!(
-                    "[look_up_variable] Value found in globals for '{}': {:?}",
-                    name.lexeme, value
-                );
-                Ok(value)
-            }
+                // Call get with the globals environment wrapped in Rc<RefCell<Environment>>
+                self.globals.borrow_mut().get(name)
+                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
+            },
         }
     }
 
     fn evaluate_assign(&mut self, name: &Token, expr: &Expr) -> Result<LoxValue, RuntimeError> {
-        println!(
-            "[evaluate_assign] Evaluating assignment to variable '{}'",
-            name.lexeme
-        );
-
         let value = self.evaluate(expr)?;
-        println!(
-            "[evaluate_assign] Computed value for '{}': {:?}",
-            name.lexeme, value
-        );
 
-        let distance_option = self.locals.get(&Expr::Assign {
-            name: name.clone(),
-            value: Box::new(expr.clone()),
-        });
-
-        match distance_option {
+        match self.locals.get(&expr) {
             Some(distance) => {
-                println!(
-                    "[evaluate_assign] Variable '{}' found at distance {}, assigning value: {:?}",
-                    name.lexeme, distance, value
-                );
-                let result = self
-                    .environment
-                    .borrow_mut()
-                    .assign_at(*distance, name, value.clone())
-                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
-                println!(
-                    "[evaluate_assign] Value assigned to '{}' at distance {}: {:?}",
-                    name.lexeme, distance, result
-                );
-                Ok(result)
-            }
+                // Call assign_at with the environment wrapped in Rc<RefCell<Environment>>
+                Environment::assign_at(Rc::clone(&self.environment), *distance, name, value.clone())
+                    .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))
+            },
             None => {
-                println!(
-                    "[evaluate_assign] Variable '{}' not found in local scope, assigning in globals: {:?}",
-                    name.lexeme, value
-                );
-                let result = self
-                    .globals
-                    .borrow_mut()
-                    .assign(name, value.clone())
-                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))?;
-                println!(
-                    "[evaluate_assign] Value assigned to '{}' in globals: {:?}",
-                    name.lexeme, result
-                );
-                Ok(result)
-            }
+                // Call assign with the globals environment wrapped in Rc<RefCell<Environment>>
+                self.globals.borrow_mut().assign(name, value.clone())
+                    .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))
+            },
         }
     }
 
@@ -577,7 +515,10 @@ impl Interpreter {
             value = Some(self.evaluate(expr)?);
         }
 
-        let final_value = value.unwrap_or_else(|| LoxValue::Nil);
+        let final_value = match value {
+            Some(lox_value) => lox_value,
+            None => LoxValue::Nil,
+        };
 
         self.environment
             .borrow_mut()
@@ -595,9 +536,9 @@ impl Interpreter {
 
         let new_environment = match environment {
             Some(env) => env,
-            None => Rc::new(RefCell::new(Environment::with_enclosing(Rc::clone(
+            None => Environment::with_enclosing(Rc::clone(
                 &self.environment,
-            )))),
+            )),
         };
 
         self.environment = Rc::clone(&new_environment);
@@ -641,13 +582,13 @@ impl Interpreter {
     pub fn interpret_function_stmt(
         &mut self,
         name: &Token,
-        params: &[Token],
-        body: &[Stmt],
+        params: &Vec<Token>,
+        body: &Vec<Stmt>,
     ) -> Result<LoxValue, RuntimeError> {
         let function = LoxFunction::new(
             name.clone(),
-            params.to_vec(),
-            body.to_owned(),
+            params.clone(),
+            body.clone(),
             Rc::clone(&self.environment),
         );
 
@@ -670,12 +611,6 @@ impl Interpreter {
             None => LoxValue::Nil,
         };
         Err(RuntimeError::Return(value))
-    }
-}
-
-impl Default for Interpreter {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
