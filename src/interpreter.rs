@@ -21,6 +21,7 @@ pub enum RuntimeError {
     DivideByZero(Token, LoxValueError),
     UndefinedVariable(Token, EnvironmentError),
     AssignVariableError(Token, EnvironmentError),
+    InputError(String),
     Return(LoxValue),
 }
 

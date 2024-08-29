@@ -4,10 +4,15 @@ use crate::lox_callable::LoxCallable;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub fn define_globals(environment: &Rc<RefCell<Environment>>) {
-    environment.borrow_mut().define(
+pub fn define_globals(global_environment: &Rc<RefCell<Environment>>) {
+    global_environment.borrow_mut().define(
         "clock".to_string(),
         LoxValue::Callable(Rc::new(ClockFunction)),
+    );
+
+    global_environment.borrow_mut().define(
+        "input".to_string(),
+        LoxValue::Callable(Rc::new(InputFunction)),
     );
 }
 
@@ -34,5 +39,41 @@ impl LoxCallable for ClockFunction {
 
     fn get_name(&self) -> &str {
         "<native fn clock>"
+    }
+}
+
+use std::io;
+use std::io::Write;
+
+pub struct InputFunction;
+
+impl LoxCallable for InputFunction {
+    fn arity(&self) -> usize {
+        1
+    }
+
+    fn call(
+        &self,
+        _interpreter: &mut Interpreter,
+        arguments: Vec<LoxValue>,
+    ) -> Result<LoxValue, RuntimeError> {
+        if let LoxValue::String(prompt) = &arguments[0] {
+            print!("{}", prompt);
+        } else {
+            return Err(RuntimeError::InputError(
+                "Argument to input must be a string.".to_string(),
+            ));
+        }
+
+        io::stdout().flush().unwrap(); // Flush stdout to ensure the prompt is shown
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).map_err(|e| {
+            RuntimeError::InputError(format!("Failed to read input: {}", e))
+        })?;
+        Ok(LoxValue::String(input.trim().to_string())) // Trim the input and return as LoxValue::String
+    }
+
+    fn get_name(&self) -> &str {
+        "<native fn input>"
     }
 }
