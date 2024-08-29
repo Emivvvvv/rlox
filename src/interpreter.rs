@@ -616,18 +616,32 @@ impl Interpreter {
 
 #[cfg(test)]
 mod interpreter_tests {
-    use crate::lexer::token::Hf64;
     use super::*;
     use crate::parser::Parser;
 
     #[test]
     fn test_arithmetic_expression() {
         let tokens = vec![
-            Token::new(TokenType::Number, "1".to_string(), Literal::Num(Hf64::from(1.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "1".to_string(),
+                Literal::Num(1.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(Hf64::from(2.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "2".to_string(),
+                Literal::Num(2.0.into()),
+                1,
+            ),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(Hf64::from(3.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "3".to_string(),
+                Literal::Num(3.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -657,9 +671,19 @@ mod interpreter_tests {
     #[should_panic]
     fn test_division_by_zero() {
         let tokens = vec![
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(Hf64::from(10.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "10".to_string(),
+                Literal::Num(10.0.into()),
+                1,
+            ),
             Token::new(TokenType::Slash, "/".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "0".to_string(), Literal::Num(Hf64::from(0.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "0".to_string(),
+                Literal::Num(0.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -699,12 +723,27 @@ mod interpreter_tests {
     fn test_grouping_and_precedence() {
         let tokens = vec![
             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "1".to_string(), Literal::Num(Hf64::from(1.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "1".to_string(),
+                Literal::Num(1.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(Hf64::from(2.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "2".to_string(),
+                Literal::Num(2.0.into()),
+                1,
+            ),
             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(Hf64::from(3.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "3".to_string(),
+                Literal::Num(3.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -741,12 +780,27 @@ mod interpreter_tests {
         let tokens = vec![
             Token::new(TokenType::Print, "print".to_string(), Literal::Nil, 1),
             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "2".to_string(), Literal::Num(Hf64::from(2.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "2".to_string(),
+                Literal::Num(2.0.into()),
+                1,
+            ),
             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "3".to_string(), Literal::Num(Hf64::from(3.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "3".to_string(),
+                Literal::Num(3.0.into()),
+                1,
+            ),
             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "4".to_string(), Literal::Num(Hf64::from(4.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "4".to_string(),
+                Literal::Num(4.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
         ];
@@ -766,7 +820,12 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(Hf64::from(10.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "10".to_string(),
+                Literal::Num(10.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
@@ -786,13 +845,23 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "10".to_string(), Literal::Num(Hf64::from(10.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "10".to_string(),
+                Literal::Num(10.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::LeftBrace, "{".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "y".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "5".to_string(), Literal::Num(Hf64::from(5.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "5".to_string(),
+                Literal::Num(5.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
@@ -821,7 +890,12 @@ mod interpreter_tests {
             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Identifier, "number".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-            Token::new(TokenType::Number, "42".to_string(), Literal::Num(Hf64::from(42.0)), 1),
+            Token::new(
+                TokenType::Number,
+                "42".to_string(),
+                Literal::Num(42.0.into()),
+                1,
+            ),
             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
@@ -855,5 +929,105 @@ mod interpreter_tests {
         } else {
             panic!("Expected a number from clock function");
         }
+    }
+
+    #[test]
+    fn test_evaluate_block_stmt_environment_reversion() {
+        let mut interpreter = Interpreter::new();
+        let global_env = interpreter.get_globals();
+
+        // Define a variable in the global scope
+        global_env
+            .borrow_mut()
+            .define("x".to_string(), LoxValue::Number(10.0));
+
+        // Block that defines a new variable and should revert to the global environment
+        let block_statements = vec![Stmt::Var {
+            name: Token::new(TokenType::Identifier, "y".to_string(), Literal::Nil, 1),
+            initializer: Some(Expr::Literal {
+                value: Literal::Num(20.0.into()),
+            }),
+        }];
+
+        interpreter
+            .evaluate_block_stmt(&block_statements, None)
+            .unwrap();
+
+        // Ensure that 'x' still exists in the global environment after block execution
+        assert_eq!(
+            global_env.borrow().get(&Token::new(
+                TokenType::Identifier,
+                "x".to_string(),
+                Literal::Nil,
+                1
+            )),
+            Ok(LoxValue::Number(10.0))
+        );
+
+        // Ensure that 'y' is not accessible outside the block (since it's local to the block)
+        assert!(global_env
+            .borrow()
+            .get(&Token::new(
+                TokenType::Identifier,
+                "y".to_string(),
+                Literal::Nil,
+                1
+            ))
+            .is_err());
+    }
+
+    #[test]
+    fn test_evaluate_assign_correct_environment() {
+        let mut interpreter = Interpreter::new();
+        let global_env = interpreter.get_globals();
+
+        // Define variable 'a' in global scope
+        global_env
+            .borrow_mut()
+            .define("a".to_string(), LoxValue::String("first".to_string()));
+
+        // Assign new value to 'a'
+        let name = Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1);
+        let value = Box::new(Expr::Literal {
+            value: Literal::Str("second".to_string()),
+        });
+
+        interpreter.evaluate_assign(&name, &value).unwrap();
+
+        // Ensure 'a' was updated in the global scope
+        assert_eq!(
+            global_env.borrow().get(&name),
+            Ok(LoxValue::String("second".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_scope_management() {
+        let mut interpreter = Interpreter::new();
+
+        // Begin a new scope
+        interpreter
+            .evaluate_block_stmt(
+                &[Stmt::Var {
+                    name: Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
+                    initializer: Some(Expr::Literal {
+                        value: Literal::Num(10.0.into()),
+                    }),
+                }],
+                None,
+            )
+            .unwrap();
+
+        // Ensure 'x' is not accessible after the scope ends
+        assert!(interpreter
+            .get_globals()
+            .borrow()
+            .get(&Token::new(
+                TokenType::Identifier,
+                "x".to_string(),
+                Literal::Nil,
+                1
+            ))
+            .is_err());
     }
 }

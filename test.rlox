@@ -1,5 +1,10 @@
-var a = "outer";
+var a = "global";
 {
-  var a = "inner";
-  print a;
+  fun showA() {
+    print a;
+  }
+
+  showA();
+  var a = "block";
+  showA();
 }
