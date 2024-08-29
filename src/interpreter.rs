@@ -402,10 +402,7 @@ impl Interpreter {
     }
 
     fn evaluate_variable(&mut self, name: &Token) -> Result<LoxValue, RuntimeError> {
-        self.environment
-            .borrow_mut()
-            .get(name)
-            .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
+        self.look_up_variable(name, Expr::Variable { name: name.clone() })
     }
 
     fn look_up_variable(&mut self, name: &Token, expr: Expr) -> Result<LoxValue, RuntimeError> {

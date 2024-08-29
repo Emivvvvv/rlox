@@ -35,7 +35,7 @@ impl LoxCallable for LoxFunction {
         interpreter: &mut Interpreter,
         arguments: Vec<LoxValue>,
     ) -> Result<LoxValue, RuntimeError> {
-        let mut environment = Environment::with_enclosing(Rc::clone(&self.closure));
+        let environment = Environment::with_enclosing(Rc::clone(&self.closure));
 
         for (param, argument) in self.params.iter().zip(arguments.iter()) {
             environment.borrow_mut().define(param.lexeme.clone(), argument.clone());
