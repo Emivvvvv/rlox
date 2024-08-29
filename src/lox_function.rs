@@ -1,10 +1,11 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::environment::Environment;
 use crate::interpreter::{Interpreter, LoxValue, RuntimeError};
 use crate::lexer::token::Token;
 use crate::lox_callable::LoxCallable;
 use crate::stmt::Stmt;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct LoxFunction {
     name: Token,

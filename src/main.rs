@@ -1,19 +1,24 @@
-use rlox::lox;
 use std::env::args;
 use std::process::exit;
+
+use rlox::lox;
 
 fn main() {
     let args: Vec<String> = args().collect();
 
-    if args.len() > 2 {
-        println!("Usage: rlox [script]");
-        exit(64);
-    } else if args.len() == 2 {
-        if let Err(e) = lox::run_file(&args[1]) {
-            eprintln!("{e}");
-            exit(65)
-        };
-    } else {
-        let _ = lox::run_prompt();
+    match args.len() {
+        0 | 1 => {
+            let _ = lox::run_prompt();
+        }
+        2 => {
+            if let Err(e) = lox::run_file(&args[1]) {
+                eprintln!("{e}");
+                exit(65);
+            }
+        }
+        _ => {
+            println!("Usage: rlox [script]");
+            exit(64);
+        }
     }
 }
