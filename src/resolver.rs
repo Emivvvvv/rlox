@@ -137,7 +137,7 @@ impl Resolver {
         &mut self,
         _name: &Token,
         params: &Vec<Token>,
-        body: &Vec<Stmt>,
+        body: &[Stmt],
         func_type: FunctionType,
     ) {
         let enclosing_function = self.current_function;
@@ -170,7 +170,7 @@ impl Resolver {
         self.define(name)
     }
 
-    fn function_stmt(&mut self, name: &Token, params: &Vec<Token>, body: &Vec<Stmt>) {
+    fn function_stmt(&mut self, name: &Token, params: &Vec<Token>, body: &[Stmt]) {
         self.declare(name);
         self.define(name);
 
