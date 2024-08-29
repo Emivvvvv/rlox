@@ -38,10 +38,10 @@ impl LoxCallable for LoxFunction {
         let mut environment = Environment::with_enclosing(Rc::clone(&self.closure));
 
         for (param, argument) in self.params.iter().zip(arguments.iter()) {
-            environment.define(param.lexeme.clone(), argument.clone());
+            environment.borrow_mut().define(param.lexeme.clone(), argument.clone());
         }
 
-        interpreter.evaluate_block_stmt(&self.body, Some(Rc::new(RefCell::new(environment))))
+        interpreter.evaluate_block_stmt(&self.body, Some(environment))
     }
 
     fn arity(&self) -> usize {

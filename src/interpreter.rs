@@ -8,6 +8,7 @@ use crate::lox;
 use crate::lox_callable::LoxCallable;
 use crate::lox_function::LoxFunction;
 use crate::stmt::Stmt;
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -291,7 +292,7 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         // Create a new global environment
-        let globals = Rc::new(RefCell::new(Environment::new()));
+        let globals = Environment::new();
         define_globals(&globals);
 
         // Initially, the environment is the global environment
@@ -409,8 +410,16 @@ impl Interpreter {
 
     fn look_up_variable(&mut self, name: &Token, expr: Expr) -> Result<LoxValue, RuntimeError> {
         match self.locals.get(&expr) {
-            Some(distance) => self.environment.borrow_mut().get_at(*distance, &name.lexeme).map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
-            None => self.globals.borrow_mut().get(name).map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e)),
+            Some(distance) => {
+                // Call get_at with the environment wrapped in Rc<RefCell<Environment>>
+                Environment::get_at(Rc::clone(&self.environment), *distance, &name.lexeme)
+                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
+            },
+            None => {
+                // Call get with the globals environment wrapped in Rc<RefCell<Environment>>
+                self.globals.borrow_mut().get(name)
+                    .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
+            },
         }
     }
 
@@ -418,8 +427,16 @@ impl Interpreter {
         let value = self.evaluate(expr)?;
 
         match self.locals.get(&expr) {
-            Some(distance) => self.environment.borrow_mut().assign_at(*distance, name.clone(), value.clone()).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e)),
-            None => self.globals.borrow_mut().assign(name, value.clone()).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e)),
+            Some(distance) => {
+                // Call assign_at with the environment wrapped in Rc<RefCell<Environment>>
+                Environment::assign_at(Rc::clone(&self.environment), *distance, name, value.clone())
+                    .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))
+            },
+            None => {
+                // Call assign with the globals environment wrapped in Rc<RefCell<Environment>>
+                self.globals.borrow_mut().assign(name, value.clone())
+                    .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))
+            },
         }
     }
 
@@ -522,9 +539,9 @@ impl Interpreter {
 
         let new_environment = match environment {
             Some(env) => env,
-            None => Rc::new(RefCell::new(Environment::with_enclosing(Rc::clone(
+            None => Environment::with_enclosing(Rc::clone(
                 &self.environment,
-            )))),
+            )),
         };
 
         self.environment = Rc::clone(&new_environment);
