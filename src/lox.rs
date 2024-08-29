@@ -6,7 +6,6 @@ use std::io;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::Path;
 use std::rc::Rc;
-
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lexer::lexer;
 use crate::lexer::token::{Token, TokenType};
@@ -102,13 +101,14 @@ pub fn run(source: String) -> Result<(), LoxError> {
         }
     }
 
+
     let mut interpreter = Interpreter::new();
 
     let rc_refcell_interpreter = Rc::new(RefCell::new(interpreter));
 
     {
         let mut resolver = Resolver::new(Rc::clone(&rc_refcell_interpreter));
-        resolver.resolve_vec(&statements);
+        resolver.resolve_array(&statements);
     }
 
     unsafe {
@@ -129,7 +129,7 @@ pub fn run(source: String) -> Result<(), LoxError> {
     Ok(())
 }
 
-pub fn error(token: Token, message: &str) {
+pub fn error(token: &Token, message: &str) {
     if token.token_type == TokenType::Eof {
         report(token.line, " at end", message);
     } else {

@@ -1,7 +1,9 @@
 use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -16,7 +18,7 @@ pub enum TokenType {
     Slash,
     Star,
 
-    // One or two caharacter tokens.
+    // One or two character tokens.
     Bang,
     BangEqual,
     Equal,
@@ -51,36 +53,24 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct Hf64(pub f64);
-
-impl PartialEq for Hf64 {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0 || (self.0.is_nan() && other.0.is_nan())
-    }
-}
-
-impl Eq for Hf64 {}
-
-impl Hash for Hf64 {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        if self.0.is_nan() {
-            state.write_u8(0);
-        } else {
-            state.write_u64(self.0.to_bits());
-        }
-    }
-}
+#[derive(Debug, Eq, Hash, PartialEq, Copy, Clone)]
+pub struct Hf64(pub Decimal);
 
 impl From<f64> for Hf64 {
     fn from(value: f64) -> Self {
-        Hf64(value)
+        Hf64(Decimal::from_f64(value).unwrap())
     }
 }
 
 impl From<Hf64> for f64 {
     fn from(val: Hf64) -> Self {
-        val.0
+        val.0.to_f64().unwrap()
+    }
+}
+
+impl From<&Hf64> for f64 {
+    fn from(val: &Hf64) -> Self {
+        val.0.to_f64().unwrap()
     }
 }
 
@@ -90,7 +80,7 @@ impl fmt::Display for Hf64 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum Literal {
     Str(String),
     Num(Hf64),
@@ -99,7 +89,7 @@ pub enum Literal {
     Nil,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,

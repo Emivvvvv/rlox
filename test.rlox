@@ -1,6 +1,10 @@
+var a = "global";
 {
-    var a = "first";
+  fun showA() {
     print a;
-    a = "second";
-    print a;
+  }
+
+  showA();
+  var a = "block";
+  showA();
 }
