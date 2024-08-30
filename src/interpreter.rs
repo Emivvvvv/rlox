@@ -460,15 +460,15 @@ impl Interpreter {
             } else {
                 return Err(RuntimeError::CustomError("Superclass must be parsed as Expr::Variable, which means it must have a `name` field.".to_string()))
             };
-
+            
             if let LoxValue::Callable(callable) = superclass_lox_value {
                 if let Some(superklass) = callable.borrow().as_any().downcast_ref::<LoxClass>(){
                     superclass_option = Some(Box::new(superklass.clone()))
                 } else {
-                    lox::error(superclass_name, "Superclass must be a class.");
+                    lox::error(superclass_name, "Superclass must be a class. It's callable but not a class.");
                 }
-            } {
-                println!("DEBUG: not callable")
+            } else {
+                lox::error(superclass_name, "Superclass must be a callable and class.");
             }
         }
 
