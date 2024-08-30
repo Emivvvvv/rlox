@@ -535,6 +535,16 @@ impl Parser {
             });
         }
 
+        if self.match_types(&[TokenType::Super]) {
+            let keyword = self.previous();
+            self.consume(TokenType::Dot, "Expect '.' after 'super'.")?;
+            let method = self.consume(TokenType::Identifier, "Expect superclass method name.")?;
+            return Ok(Expr::Super {
+                keyword,
+                method
+            })
+        }
+
         if self.match_types(&[TokenType::This]) {
             return Ok(Expr::This {
                 keyword: self.previous(),

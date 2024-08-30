@@ -8,14 +8,16 @@ use crate::lexer::token::Token;
 #[derive(Debug, PartialEq)]
 pub enum EnvironmentError {
     UndefinedVariable(String),
-    AssignVariableError(String)
+    AssignVariableError(String),
+    CustomError(String),
 }
 
 impl EnvironmentError {
     pub fn get_string(self) -> String {
         match self {
-            EnvironmentError::UndefinedVariable(err_str) => err_str,
-            EnvironmentError::AssignVariableError(err_str) => err_str,
+            EnvironmentError::UndefinedVariable(err_str)
+            | EnvironmentError::AssignVariableError(err_str)
+            | EnvironmentError::CustomError(err_str) => err_str,
         }
     }
 }
@@ -23,7 +25,7 @@ impl EnvironmentError {
 #[derive(Debug)]
 pub struct Environment {
     values: HashMap<String, LoxValue>,
-    enclosing: Option<Rc<RefCell<Environment>>>,
+    pub(crate) enclosing: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {

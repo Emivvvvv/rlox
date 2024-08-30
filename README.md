@@ -12,4 +12,4 @@ Rust implementation of the jlox interpreter from the second chapter of "Crafting
 |       Functions        |   ✅    |
 | Resolving and Binding  |   ✅    |
 |        Classes         |   ✅    |
-|      Inheritance       |   ⏳    |
+|      Inheritance       |   ✅    |

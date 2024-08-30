@@ -43,6 +43,7 @@ impl Resolvable for Expr {
             Expr::Get {object, name} => resolver.get_expr(object, name),
             Expr::Set {object, name, value} => resolver.set_expr(object, name, value),
             Expr::This {keyword} => resolver.this_expr(keyword),
+            Expr::Super {keyword, method} => resolver.super_expr(keyword, method),
         }
     }
 }
@@ -78,6 +79,7 @@ enum FunctionType {
 #[derive(Copy, Clone, PartialEq)]
 enum ClassType {
     Class,
+    Subclass,
     None,
 }
 
@@ -212,6 +214,16 @@ impl Resolver {
         self.resolve_local(&Expr::This {keyword: keyword.clone()}, keyword)
     }
 
+    pub fn super_expr(&mut self, keyword: &Token, methods: &Token) {
+        if self.current_class == ClassType::None {
+            lox::error(keyword, "Can't use 'super' outside of a class.");
+        } else if self.current_class != ClassType::Subclass {
+            lox::error(keyword, "Can't use 'super' in a class with no superclass.");
+        }
+
+        self.resolve_local(&Expr::Super {keyword: keyword.clone(), method: methods.clone()}, keyword)
+    }
+
     pub fn function_stmt(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
         self.declare(name);
         self.define(name);
@@ -259,12 +271,24 @@ impl Resolver {
         self.define(class_name);
 
         if let Some(superclass) = superclass {
+            self.current_class = ClassType::Subclass;
             if let Expr::Variable{name} = superclass {
                 if name.lexeme == class_name.lexeme {
                     lox::error(name, "A class can't inherit from itself.");
                 }
             }
             self.resolve(superclass);
+        }
+
+        if let Some(superclass) = superclass {
+            self.begin_scope();
+            let scope = self.scopes.last_mut();
+            match scope {
+                Some(scope) => {
+                    scope.insert("super".to_string(), true);
+                }
+                None => return
+            }
         }
 
         self.begin_scope();
@@ -291,6 +315,10 @@ impl Resolver {
         }
 
         self.end_scope();
+
+        if let Some(_) = superclass {
+            self.end_scope();
+        }
 
         self.current_class = enclosing_class;
     }

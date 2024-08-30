@@ -77,6 +77,7 @@ impl Evaluable for Expr {
             Expr::Get {object,  name} => interpreter.evaluate_get(object, name),
             Expr::Set {object,  name, value} => interpreter.evaluate_set(object, name, value),
             Expr::This {keyword} => interpreter.evaluate_this(keyword),
+            Expr::Super {keyword, method} => interpreter.evaluate_super(keyword, method),
         }
     }
 }
@@ -368,6 +369,21 @@ impl Interpreter {
         self.look_up_variable(keyword, Expr::This {keyword: keyword.clone()})
     }
 
+    fn evaluate_super(&mut self, keyword: &Token, method: &Token) -> Result<LoxValue, RuntimeError> {
+        let distance = self.locals.get(&Expr::Super {keyword: keyword.clone(), method: method.clone()}).unwrap();
+        let superclass_lox_value = Environment::get_at(Rc::clone(&self.environment), *distance, &"super".to_string()).map_err(|e| RuntimeError::UndefinedVariable(keyword.clone(), e))?;
+
+        let binding = Environment::get_at(Rc::clone(&self.environment), distance - 1, &"this".to_string()).map_err(|e| RuntimeError::UndefinedVariable(keyword.clone(), e))?;
+        let binding = binding.extract_callable().unwrap().borrow();
+        let object = binding.as_any().downcast_ref::<LoxInstance>().unwrap();
+
+        let binding = superclass_lox_value.extract_callable().unwrap().borrow();
+        let binding = binding.as_any().downcast_ref::<LoxClass>().unwrap().find_method(&method.lexeme).unwrap().extract_callable().unwrap().borrow();
+        let method = binding.as_any().downcast_ref::<LoxFunction>().unwrap();
+
+        Ok(LoxValue::Callable(Rc::new(RefCell::new(method.bind(Rc::new(RefCell::new(object.clone())))))))
+    }
+
     fn evaluate_expression_stmt(&mut self, expr: &Expr) -> Result<LoxValue, RuntimeError> {
         self.evaluate(expr)
     }
@@ -452,8 +468,9 @@ impl Interpreter {
 
     pub fn evaluate_class_stmt(&mut self, name: &Token, superclass: &Option<Expr>, methods: &[Stmt],) -> Result<LoxValue, RuntimeError> {
         let mut superclass_option: Option<Box<LoxClass>> = None;
+        let mut superclass_lox_value = LoxValue::Nil;
         if let Some(superclass_expr) = superclass {
-            let superclass_lox_value = self.evaluate(superclass_expr)?;
+            superclass_lox_value = self.evaluate(superclass_expr)?;
 
             let superclass_name = if let Expr::Variable {name} = superclass_expr {
                 name
@@ -461,7 +478,7 @@ impl Interpreter {
                 return Err(RuntimeError::CustomError("Superclass must be parsed as Expr::Variable, which means it must have a `name` field.".to_string()))
             };
 
-            if let LoxValue::Callable(callable) = superclass_lox_value {
+            if let LoxValue::Callable(callable) = superclass_lox_value.clone() {
                 if let Some(superklass) = callable.borrow().as_any().downcast_ref::<LoxClass>(){
                     superclass_option = Some(Box::new(superklass.clone()))
                 } else {
@@ -473,6 +490,11 @@ impl Interpreter {
         }
 
         self.environment.borrow_mut().define(name.lexeme.clone(), LoxValue::Nil);
+
+        if let Some(superclass) = superclass {
+            self.environment = Environment::with_enclosing(Rc::clone(&self.environment));
+            self.environment.borrow_mut().define("super".to_string(), superclass_lox_value);
+        }
 
         let mut mapped_methods: HashMap<String, LoxValue> = HashMap::new();
         for method in methods {
@@ -486,6 +508,12 @@ impl Interpreter {
         }
 
         let rc_refcell_klass = Rc::new(RefCell::new(LoxClass::new(name.lexeme.clone(), superclass_option ,mapped_methods)));
+
+        if superclass != &None {
+            let enclosing = self.environment.borrow_mut().enclosing.clone().unwrap();
+            self.environment = enclosing;
+        }
+
         self.environment.borrow_mut().assign(name, LoxValue::Callable(rc_refcell_klass)).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))?;
 
         Ok(LoxValue::Nil)
