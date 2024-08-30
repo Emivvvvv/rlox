@@ -38,7 +38,7 @@ impl Lexer {
     }
 
     fn is_at_end(&self) -> bool {
-        &self.current >= &self.source.len()
+        self.current >= self.source.len()
     }
 
     fn scan_token(&mut self) {
@@ -97,7 +97,7 @@ impl Lexer {
                     self.add_token(TokenType::Slash, Literal::Nil);
                 }
             }
-            ' ' | '\r' | '\t' => return,
+            ' ' | '\r' | '\t' => (),
             '\n' => self.line += 1,
             '"' => self.string(),
             '0'..='9' => self.number(),
@@ -193,17 +193,17 @@ impl Lexer {
     }
 
     fn number(&mut self) {
-        while self.peek().is_digit(10) {
+        while self.peek().is_ascii_digit() {
             self.advance();
         }
 
         // Check for a fractional part
-        if self.peek() == '.' && self.peek_next().is_digit(10) {
+        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
             // Advance over the '.'
             self.advance();
 
             // Continue with the fractional part
-            while self.peek().is_digit(10) {
+            while self.peek().is_ascii_digit() {
                 self.advance();
             }
         }
@@ -265,8 +265,7 @@ mod tests {
         let source = "( ) { } , . - + ; * ! = < > /";
         let mut lexer = Lexer::new(source.to_string());
         lexer.scan_tokens();
-        let expected_types = vec![
-            TokenType::LeftParen,
+        let expected_types = [TokenType::LeftParen,
             TokenType::RightParen,
             TokenType::LeftBrace,
             TokenType::RightBrace,
@@ -281,8 +280,7 @@ mod tests {
             TokenType::Less,
             TokenType::Greater,
             TokenType::Slash,
-            TokenType::Eof,
-        ];
+            TokenType::Eof];
 
         assert_eq!(lexer.tokens.len(), expected_types.len());
         for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
@@ -368,13 +366,11 @@ mod tests {
         let source = "class var if else";
         let mut lexer = Lexer::new(source.to_string());
         lexer.scan_tokens();
-        let expected_types = vec![
-            TokenType::Class,
+        let expected_types = [TokenType::Class,
             TokenType::Var,
             TokenType::If,
             TokenType::Else,
-            TokenType::Eof,
-        ];
+            TokenType::Eof];
         assert_eq!(lexer.tokens.len(), expected_types.len());
         for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
@@ -386,12 +382,10 @@ mod tests {
         let source = "foo bar baz";
         let mut lexer = Lexer::new(source.to_string());
         lexer.scan_tokens();
-        let expected_types = vec![
+        let expected_types = [TokenType::Identifier,
             TokenType::Identifier,
             TokenType::Identifier,
-            TokenType::Identifier,
-            TokenType::Eof,
-        ];
+            TokenType::Eof];
         assert_eq!(lexer.tokens.len(), expected_types.len());
         for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
@@ -404,8 +398,7 @@ mod tests {
         let source = "var x = 100; // variable declaration\nfunc(y)";
         let mut lexer = Lexer::new(source.to_string());
         lexer.scan_tokens();
-        let expected_types = vec![
-            TokenType::Var,
+        let expected_types = [TokenType::Var,
             TokenType::Identifier,
             TokenType::Equal,
             TokenType::Number,
@@ -414,8 +407,7 @@ mod tests {
             TokenType::LeftParen,
             TokenType::Identifier,
             TokenType::RightParen,
-            TokenType::Eof,
-        ];
+            TokenType::Eof];
         assert_eq!(lexer.tokens.len(), expected_types.len());
         for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);

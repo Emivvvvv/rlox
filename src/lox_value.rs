@@ -144,6 +144,7 @@ impl LoxValue {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub(crate) fn is_equal(self, other: Self) -> Self {
         let bool_value = match (self, other) {
             (LoxValue::Boolean(left_bool), LoxValue::Boolean(right_bool)) => {
@@ -200,7 +201,7 @@ impl fmt::Debug for LoxValue {
             LoxValue::Boolean(b) => write!(f, "Boolean({:?})", b),
             LoxValue::Number(n) => write!(f, "Number({:?})", n),
             LoxValue::String(s) => write!(f, "String({:?})", s),
-            LoxValue::Callable(c) => write!(f, "Callable(<{}>)", c.borrow().to_string()),
+            LoxValue::Callable(c) => write!(f, "Callable(<{}>)", c.borrow()),
         }
     }
 }

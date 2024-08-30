@@ -65,15 +65,13 @@ impl Environment {
         if self.values.contains_key(&name.lexeme) {
             self.values.insert(name.lexeme.clone(), value.clone());
             Ok(value)
+        } else if let Some(enclosing) = &self.enclosing {
+            enclosing.borrow_mut().assign(name, value)
         } else {
-            if let Some(enclosing) = &self.enclosing {
-                enclosing.borrow_mut().assign(name, value)
-            } else {
-                Err(EnvironmentError::UndefinedVariable(format!(
-                    "Undefined variable '{}'.",
-                    name.lexeme
-                )))
-            }
+            Err(EnvironmentError::UndefinedVariable(format!(
+                "Undefined variable '{}'.",
+                name.lexeme
+            )))
         }
     }
 
@@ -118,9 +116,9 @@ impl Environment {
         if distance == 0 {
             env
         } else if distance == 1 {
-            Rc::clone(&env.borrow().enclosing.as_ref().expect("No enclosing environment"))
+            Rc::clone(env.borrow().enclosing.as_ref().expect("No enclosing environment"))
         } else {
-            let mut environment = Rc::clone(&env.borrow().enclosing.as_ref().expect("No enclosing environment"));
+            let mut environment = Rc::clone(env.borrow().enclosing.as_ref().expect("No enclosing environment"));
 
             for _ in 1..distance {
                 let parent = environment.borrow().enclosing.clone();

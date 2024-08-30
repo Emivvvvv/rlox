@@ -73,10 +73,17 @@ enum FunctionType {
     None,
 }
 
+#[derive(Copy, Clone, PartialEq)]
+enum ClassType {
+    Class,
+    None,
+}
+
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
     scopes: Vec<HashMap<String, bool>>,
     current_function: FunctionType,
+    current_class: ClassType,
 }
 
 impl Resolver {
@@ -85,6 +92,7 @@ impl Resolver {
             interpreter,
             scopes: Vec::new(),
             current_function: FunctionType::None,
+            current_class: ClassType::None,
         }
     }
 
@@ -118,11 +126,8 @@ impl Resolver {
 
     fn define(&mut self, name: &Token) {
         let scope = self.scopes.last_mut();
-        match scope {
-            Some(scope) => {
-                scope.insert(name.lexeme.clone(), true);
-            }
-            None => return
+        if let Some(scope) = scope {
+            scope.insert(name.lexeme.clone(), true);
         }
     }
 
@@ -197,6 +202,11 @@ impl Resolver {
     }
 
     pub fn this_expr(&mut self, keyword: &Token) {
+        if self.current_class == ClassType::None {
+            lox::error(keyword,
+                      "Can't use 'this' outside of a class.");
+        }
+
         self.resolve_local(&Expr::This {keyword: keyword.clone()}, keyword)
     }
 
@@ -237,6 +247,9 @@ impl Resolver {
     }
 
     fn class_stmt(&mut self, name: &Token, methods: &[Stmt]) {
+        let enclosing_class = self.current_class;
+        self.current_class = ClassType::Class;
+
         self.declare(name);
         self.define(name);
 
@@ -257,6 +270,8 @@ impl Resolver {
         }
 
         self.end_scope();
+
+        self.current_class = enclosing_class;
     }
 
     fn binary_expr(&mut self, left: &Expr, _operator: &Token, right: &Expr) {

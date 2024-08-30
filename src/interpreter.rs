@@ -118,6 +118,12 @@ pub struct Interpreter {
     locals: HashMap<Expr, usize>,
 }
 
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Interpreter {
     pub fn new() -> Self {
         // Create a new global environment
@@ -252,7 +258,7 @@ impl Interpreter {
     fn evaluate_assign(&mut self, name: &Token, expr: &Expr) -> Result<LoxValue, RuntimeError> {
         let value = self.evaluate(expr)?;
 
-        match self.locals.get(&expr) {
+        match self.locals.get(expr) {
             Some(distance) => {
                 // Call assign_at with the environment wrapped in Rc<RefCell<Environment>>
                 Environment::assign_at(Rc::clone(&self.environment), *distance, name, value.clone())
@@ -466,13 +472,13 @@ impl Interpreter {
     pub fn interpret_function_stmt(
         &mut self,
         name: &Token,
-        params: &Vec<Token>,
-        body: &Vec<Stmt>,
+        params: &[Token],
+        body: &[Stmt],
     ) -> Result<LoxValue, RuntimeError> {
         let function = LoxFunction::new(
             name.clone(),
-            params.clone(),
-            body.clone(),
+            params.to_owned(),
+            body.to_owned(),
             Rc::clone(&self.environment),
         );
 
