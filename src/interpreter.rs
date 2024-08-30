@@ -491,7 +491,7 @@ impl Interpreter {
 
         self.environment.borrow_mut().define(name.lexeme.clone(), LoxValue::Nil);
 
-        if let Some(superclass) = superclass {
+        if superclass.is_some() {
             self.environment = Environment::with_enclosing(Rc::clone(&self.environment));
             self.environment.borrow_mut().define("super".to_string(), superclass_lox_value);
         }
@@ -509,7 +509,7 @@ impl Interpreter {
 
         let rc_refcell_klass = Rc::new(RefCell::new(LoxClass::new(name.lexeme.clone(), superclass_option ,mapped_methods)));
 
-        if superclass != &None {
+        if superclass.is_some() {
             let enclosing = self.environment.borrow_mut().enclosing.clone().unwrap();
             self.environment = enclosing;
         }

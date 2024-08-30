@@ -1,7 +1,6 @@
 use crate::expr::Expr;
 use crate::lexer::token::{Literal, Token, TokenType};
 use crate::lox;
-use crate::lox_value::LoxValue::Nil;
 use crate::stmt::Stmt;
 
 #[derive(Debug, Clone)]

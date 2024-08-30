@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use rust_decimal_macros::dec;
 use crate::expr::Expr;
 use crate::interpreter::Interpreter;
 use crate::lexer::token::Token;
@@ -280,7 +279,7 @@ impl Resolver {
             self.resolve(superclass);
         }
 
-        if let Some(superclass) = superclass {
+        if superclass.is_some() {
             self.begin_scope();
             let scope = self.scopes.last_mut();
             match scope {
@@ -316,7 +315,7 @@ impl Resolver {
 
         self.end_scope();
 
-        if let Some(_) = superclass {
+        if superclass.is_some() {
             self.end_scope();
         }
 

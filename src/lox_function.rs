@@ -65,7 +65,7 @@ impl LoxCallable for LoxFunction {
                 // If it's an initializer, return "this"
                 if self.is_initializer {
                     Environment::get_at(Rc::clone(&self.closure), 0, &"this".to_string())
-                        .map_err(|e| RuntimeError::CustomError("initializer function couldn't find `this`".to_string()))
+                        .map_err(|_| RuntimeError::CustomError("initializer function couldn't find `this`".to_string()))
                 } else {
                     Ok(value)
                 }
@@ -75,7 +75,7 @@ impl LoxCallable for LoxFunction {
                 // If no return is thrown, and it's an initializer, return "this"
                 if self.is_initializer {
                     Environment::get_at(Rc::clone(&self.closure), 0, &"this".to_string())
-                        .map_err(|e| RuntimeError::CustomError("initializer function couldn't find `this`".to_string()))
+                        .map_err(|_| RuntimeError::CustomError("initializer function couldn't find `this`".to_string()))
                 } else {
                     Ok(LoxValue::Nil)
                 }
