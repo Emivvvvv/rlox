@@ -1,7 +1,9 @@
 class Doughnut {
-  // General doughnut stuff...
+  cook() {
+    print "Fry until golden brown.";
+  }
 }
 
-class BostonCream < Doughnut {
-  // Boston Cream-specific stuff...
-}
+class BostonCream < Doughnut {}
+
+BostonCream().cook();

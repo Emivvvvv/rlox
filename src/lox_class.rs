@@ -35,11 +35,15 @@ impl LoxClass {
 impl LoxCallable for LoxClass {
     fn arity(&self) -> usize {
         let initializer_option = self.find_method(&"init".to_string());
-        if let Some(initializer) = initializer_option {
-            initializer.extract_callable().unwrap().borrow().arity()
-        } else {
-            0
+        if let Some(initializer_value) = initializer_option {
+            if let Some(callable) = initializer_value.extract_callable() {
+                if let Some(function) = callable.borrow().as_any().downcast_ref::<LoxFunction>() {
+                    return function.arity();
+                }
+            }
         }
+
+        0
     }
 
     fn call(
@@ -50,10 +54,13 @@ impl LoxCallable for LoxClass {
         let instance = Rc::new(RefCell::new(LoxInstance::new(self)));
         let initializer_option = self.find_method(&"init".to_string());
         if let Some(initializer_value) = initializer_option {
-            if let Some(initializer) = initializer_value.extract_callable().unwrap().borrow().as_any().downcast_ref::<LoxFunction>() {
-                initializer.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
+            if let Some(callable) = initializer_value.extract_callable() {
+                if let Some(initializer) = callable.borrow().as_any().downcast_ref::<LoxFunction>() {
+                    initializer.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
+                }
             }
         }
+
         Ok(LoxValue::Callable(instance))
     }
 
@@ -76,6 +83,14 @@ impl LoxClass {
     }
 
     pub fn find_method(&self, name: &String) -> Option<&LoxValue> {
-        self.methods.get(name)
+        if self.methods.contains_key(name) {
+            return self.methods.get(name)
+        }
+
+        if let Some(superclass) = &self.superclass {
+            return superclass.find_method(name)
+        }
+
+        Some(&LoxValue::Nil)
     }
 }
