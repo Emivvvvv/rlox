@@ -1,10 +1,11 @@
 use std::any::Any;
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::environment::Environment;
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_value::LoxValue;
-use crate::lox_callable::LoxCallable;
-use std::cell::RefCell;
-use std::rc::Rc;
+use crate::lox_callable::lox_callable::LoxCallable;
 
 pub fn define_globals(global_environment: &Rc<RefCell<Environment>>) {
     global_environment.borrow_mut().define(

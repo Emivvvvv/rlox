@@ -1,3 +1,7 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use crate::environment::{Environment, EnvironmentError};
 use crate::expr::Expr;
 use crate::globals::define_globals;
@@ -5,16 +9,12 @@ use crate::lexer::token::Literal;
 use crate::lexer::token::Token;
 use crate::lexer::token::TokenType;
 use crate::lox;
-use crate::lox_callable::LoxCallable;
-use crate::lox_function::LoxFunction;
+use crate::lox_callable::lox_callable::LoxCallable;
+use crate::lox_callable::lox_function::LoxFunction;
 use crate::stmt::Stmt;
 use crate::lox_value::{LoxValue, LoxValueError};
-
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-use crate::lox_class::LoxClass;
-use crate::lox_instance::LoxInstance;
+use crate::lox_callable::lox_class::LoxClass;
+use crate::lox_callable::lox_instance::LoxInstance;
 
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -155,7 +155,7 @@ impl Interpreter {
             }
         }
 
-        todo!()
+        unreachable!()
     }
 
     pub fn interpret(&mut self, statements: Vec<Stmt>) {
@@ -503,7 +503,10 @@ impl Interpreter {
                     let function = LoxFunction::new(name.clone(), params.clone(), body.clone(), Rc::clone(&self.environment), name.lexeme == "init");
                     mapped_methods.insert(name.lexeme.clone(), LoxValue::Callable(Rc::new(RefCell::new(function))));
                 },
-                _ => panic!("Method's must be functions."),
+                _ => return Err(RuntimeError::InterpreterPanic(
+                    name.clone(),
+                    "Method's must be functions.".to_string(),
+                )),
             };
         }
 

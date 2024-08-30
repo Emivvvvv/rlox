@@ -2,12 +2,13 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_value::LoxValue;
 use crate::lexer::token::Token;
-use crate::lox_callable::LoxCallable;
-use crate::lox_class::LoxClass;
-use crate::lox_function::LoxFunction;
+use crate::lox_callable::lox_callable::LoxCallable;
+use crate::lox_callable::lox_class::LoxClass;
+use crate::lox_callable::lox_function::LoxFunction;
 
 #[derive(Clone, Debug)]
 pub struct LoxInstance {
@@ -27,7 +28,7 @@ impl LoxInstance {
         }
     }
 
-    pub(crate) fn get(instance: Rc<RefCell<LoxInstance>>, name: &Token) -> Result<LoxValue, RuntimeError> {
+    pub fn get(instance: Rc<RefCell<LoxInstance>>, name: &Token) -> Result<LoxValue, RuntimeError> {
         if let Some(lox_value) = instance.borrow().fields.get(&name.lexeme) {
             return Ok(lox_value.clone());
         } else if let Some(method) = instance.borrow().klass.find_method(&name.lexeme) {
@@ -39,7 +40,7 @@ impl LoxInstance {
         Err(RuntimeError::InstanceError(name.clone(), format!("Undefined property '{}'.", name.lexeme)))
     }
 
-    pub(crate) fn set(&mut self, name: Token, value: LoxValue) {
+    pub fn set(&mut self, name: Token, value: LoxValue) {
         self.fields.insert(name.lexeme, value);
     }
 }

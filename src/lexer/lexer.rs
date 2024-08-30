@@ -1,7 +1,6 @@
-use crate::lexer::token::{Hf64, Token, TokenType};
+use crate::lexer::token::{Hf64, Token, TokenType, Literal};
 use crate::lox::report;
 
-use super::token::Literal;
 
 pub struct Lexer {
     source: String,

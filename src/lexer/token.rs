@@ -1,5 +1,6 @@
 use std::fmt;
 use std::hash::Hash;
+
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 

@@ -6,8 +6,8 @@ use crate::environment::Environment;
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_value::LoxValue;
 use crate::lexer::token::Token;
-use crate::lox_callable::LoxCallable;
-use crate::lox_instance::LoxInstance;
+use crate::lox_callable::lox_callable::LoxCallable;
+use crate::lox_callable::lox_instance::LoxInstance;
 use crate::stmt::Stmt;
 
 pub struct LoxFunction {

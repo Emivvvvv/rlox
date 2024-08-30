@@ -3,7 +3,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::lexer::token::{Literal, TokenType};
-use crate::lox_callable::LoxCallable;
+use crate::lox_callable::lox_callable::LoxCallable;
 
 #[derive(Debug)]
 pub enum LoxValueError {

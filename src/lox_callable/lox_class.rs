@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::interpreter::{Interpreter, RuntimeError};
-use crate::lox_callable::LoxCallable;
-use crate::lox_function::LoxFunction;
-use crate::lox_instance::LoxInstance;
+use crate::lox_callable::lox_callable::LoxCallable;
+use crate::lox_callable::lox_function::LoxFunction;
+use crate::lox_callable::lox_instance::LoxInstance;
 use crate::lox_value::LoxValue;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -78,7 +78,7 @@ impl LoxCallable for LoxClass {
 }
 
 impl LoxClass {
-    pub(crate) fn get_raw_name(&self) -> &str {
+    pub fn get_raw_name(&self) -> &str {
         &self.name
     }
 
