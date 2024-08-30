@@ -26,6 +26,10 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_types(&[TokenType::Class]) {
+            return self.class_declaration();
+        }
+
         if self.match_types(&[TokenType::Fun]) {
             return self.function("function");
         }
@@ -45,6 +49,20 @@ impl Parser {
             self.synchronize(); // Synchronize after encountering a parsing error
         }
         stmt_result // Return the result of the statement (either Ok or Err)
+    }
+
+    fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self.consume(TokenType::Identifier, "Expect class name.")?;
+        self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
+
+        let mut methods = Vec::new();
+        while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+            methods.push(self.function("method")?)
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
+
+        Ok(Stmt::Class {name, methods})
     }
 
     fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {
@@ -268,6 +286,13 @@ impl Parser {
                         name,
                         value: Box::new(value),
                     })
+                },
+                Expr::Get {object, name} => {
+                    return Ok(Expr::Set {
+                        object,
+                        name,
+                        value: Box::new(value),
+                    })
                 }
                 _ => lox::error(&equals, "Invalid assignment target."),
             }
@@ -432,6 +457,12 @@ impl Parser {
         loop {
             if self.match_types(&[TokenType::LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_types(&[TokenType::Dot]) {
+                let name = self.consume(TokenType::Identifier, "Expect property name after '.'.")?;
+                expr = Expr::Get {
+                    object: Box::new(expr),
+                    name,
+                };
             } else {
                 break;
             }
@@ -493,6 +524,12 @@ impl Parser {
             self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::Grouping {
                 expression: Box::new(expr_),
+            });
+        }
+
+        if self.match_types(&[TokenType::This]) {
+            return Ok(Expr::This {
+                keyword: self.previous(),
             });
         }
 

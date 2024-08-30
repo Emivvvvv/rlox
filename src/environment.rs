@@ -2,7 +2,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::{interpreter::LoxValue, lexer::token::Token};
+use crate::lox_value::LoxValue;
+use crate::lexer::token::Token;
 
 #[derive(Debug, PartialEq)]
 pub enum EnvironmentError {

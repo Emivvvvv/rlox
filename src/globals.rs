@@ -1,5 +1,7 @@
+use std::any::Any;
 use crate::environment::Environment;
-use crate::interpreter::{Interpreter, LoxValue, RuntimeError};
+use crate::interpreter::{Interpreter, RuntimeError};
+use crate::lox_value::LoxValue;
 use crate::lox_callable::LoxCallable;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -7,12 +9,12 @@ use std::rc::Rc;
 pub fn define_globals(global_environment: &Rc<RefCell<Environment>>) {
     global_environment.borrow_mut().define(
         "clock".to_string(),
-        LoxValue::Callable(Rc::new(ClockFunction)),
+        LoxValue::Callable(Rc::new(RefCell::new(ClockFunction))),
     );
 
     global_environment.borrow_mut().define(
         "input".to_string(),
-        LoxValue::Callable(Rc::new(InputFunction)),
+        LoxValue::Callable(Rc::new(RefCell::new(InputFunction))),
     );
 }
 
@@ -39,6 +41,14 @@ impl LoxCallable for ClockFunction {
 
     fn get_name(&self) -> &str {
         "<native fn clock>"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -75,5 +85,13 @@ impl LoxCallable for InputFunction {
 
     fn get_name(&self) -> &str {
         "<native fn input>"
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

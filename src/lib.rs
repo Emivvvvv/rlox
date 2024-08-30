@@ -9,3 +9,6 @@ pub mod lox_function;
 pub mod parser;
 pub mod resolver;
 pub mod stmt;
+mod lox_class;
+mod lox_instance;
+mod lox_value;

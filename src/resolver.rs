@@ -39,6 +39,9 @@ impl Resolvable for Expr {
                 paren,
                 arguments,
             } => resolver.call_expr(callee, paren, arguments),
+            Expr::Get {object, name} => resolver.get_expr(object, name),
+            Expr::Set {object, name, value} => resolver.set_expr(object, name, value),
+            Expr::This {keyword} => resolver.this_expr(keyword),
         }
     }
 }
@@ -58,6 +61,7 @@ impl Resolvable for Stmt {
             Stmt::While { condition, body } => resolver.while_stmt(condition, body),
             Stmt::Function { name, params, body } => resolver.function_stmt(name, params, body),
             Stmt::Return { keyword, value } => resolver.return_stmt(keyword, value),
+            Stmt::Class {name, methods} => resolver.class_stmt(name, methods),
         }
     }
 }
@@ -65,6 +69,7 @@ impl Resolvable for Stmt {
 #[derive(Copy, Clone, PartialEq)]
 enum FunctionType {
     Function,
+    Method,
     None,
 }
 
@@ -182,6 +187,19 @@ impl Resolver {
         self.resolve_local(&expr,  name)
     }
 
+    pub fn get_expr(&mut self, object: &Expr, _name: &Token) {
+        self.resolve(object);
+    }
+
+    pub fn set_expr(&mut self, object:& Expr, _name: &Token, value: &Expr) {
+        self.resolve(value);
+        self.resolve(object);
+    }
+
+    pub fn this_expr(&mut self, keyword: &Token) {
+        self.resolve_local(&Expr::This {keyword: keyword.clone()}, keyword)
+    }
+
     pub fn function_stmt(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
         self.declare(name);
         self.define(name);
@@ -216,6 +234,29 @@ impl Resolver {
     fn while_stmt(&mut self, condition: &Expr, body: &Stmt) {
         self.resolve(condition);
         self.resolve(body);
+    }
+
+    fn class_stmt(&mut self, name: &Token, methods: &[Stmt]) {
+        self.declare(name);
+        self.define(name);
+
+        self.begin_scope();
+        let scope = self.scopes.last_mut();
+        match scope {
+            Some(scope) => {
+                scope.insert("this".to_string(), true);
+            }
+            None => return
+        }
+
+        for method in methods {
+            match method {
+                Stmt::Function {name, params, body} => self.resolve_function(name, params, body, FunctionType::Method),
+                _ => panic!("Method's must be functions.")
+            };
+        }
+
+        self.end_scope();
     }
 
     fn binary_expr(&mut self, left: &Expr, _operator: &Token, right: &Expr) {

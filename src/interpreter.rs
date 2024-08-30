@@ -8,17 +8,20 @@ use crate::lox;
 use crate::lox_callable::LoxCallable;
 use crate::lox_function::LoxFunction;
 use crate::stmt::Stmt;
+use crate::lox_value::{LoxValue, LoxValueError};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt;
 use std::rc::Rc;
+use crate::lox_class::LoxClass;
+use crate::lox_instance::LoxInstance;
 
 #[derive(Debug)]
 pub enum RuntimeError {
     IncorrectOperand(Token, LoxValueError),
-    InterpreterPanic(Token, String),
     DivideByZero(Token, LoxValueError),
+    InterpreterPanic(Token, String),
+    InstanceError(Token, String),
     UndefinedVariable(Token, EnvironmentError),
     AssignVariableError(Token, EnvironmentError),
     InputError(String),
@@ -32,192 +35,13 @@ impl RuntimeError {
             | RuntimeError::DivideByZero(token, lox_value_err) => {
                 (token, lox_value_err.get_string())
             }
-            RuntimeError::UndefinedVariable(token, environment_err) => {
+            RuntimeError::UndefinedVariable(token, environment_err)
+            | RuntimeError::AssignVariableError(token, environment_err) => {
                 (token, environment_err.get_string())
             }
-            RuntimeError::InterpreterPanic(token, err_str) => (token, err_str),
+            RuntimeError::InterpreterPanic(token, err_str)
+            | RuntimeError::InstanceError(token, err_str) => (token, err_str),
             _ => panic!("Should not reach here!"),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum LoxValueError {
-    IncorrectOperand(String),
-    DivideByZero(String),
-}
-
-impl LoxValueError {
-    fn get_string(self) -> String {
-        match self {
-            LoxValueError::IncorrectOperand(err_str) | LoxValueError::DivideByZero(err_str) => {
-                err_str
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-pub enum LoxValue {
-    Nil,
-    Boolean(bool),
-    Number(f64),
-    String(String),
-    Callable(Rc<dyn LoxCallable>),
-}
-
-impl LoxValue {
-    fn negate_if_num(self) -> Result<Self, LoxValueError> {
-        match self {
-            LoxValue::Number(num) => Ok(LoxValue::Number(-num)),
-            _ => Err(LoxValueError::IncorrectOperand(
-                "Operand must be a number.".to_string(),
-            )),
-        }
-    }
-
-    fn bang_if_bool(self) -> Result<Self, LoxValueError> {
-        match self {
-            LoxValue::Boolean(bool) => Ok(LoxValue::Boolean(!bool)),
-            _ => Err(LoxValueError::IncorrectOperand(
-                "Operand must be a bool.".to_string(),
-            )),
-        }
-    }
-
-    fn is_truthy(&self) -> Self {
-        if self == &LoxValue::Nil {
-            return LoxValue::Boolean(false)
-        }
-        if let &LoxValue::Boolean(bool) = self {
-            return LoxValue::Boolean(bool)
-        }
-
-        LoxValue::Boolean(true)
-    }
-
-    fn math_if_num(self, other: Self, operator: TokenType) -> Result<Self, LoxValueError> {
-        match (self, other) {
-            (LoxValue::Number(left_num), LoxValue::Number(right_num)) => {
-                let result = match operator {
-                    TokenType::Plus => left_num + right_num,
-                    TokenType::Minus => left_num - right_num,
-                    TokenType::Slash => {
-                        if right_num == 0. {
-                            return Err(LoxValueError::DivideByZero("Divide by zero".to_string()));
-                        }
-                        left_num / right_num
-                    }
-                    TokenType::Star => left_num * right_num,
-                    _ => {
-                        return Err(LoxValueError::IncorrectOperand(
-                            "Undefined operator on numbers.".to_string(),
-                        ))
-                    }
-                };
-
-                Ok(LoxValue::Number(result))
-            }
-            _ => Err(LoxValueError::IncorrectOperand(
-                "Operands must be numbers.".to_string(),
-            )),
-        }
-    }
-
-    fn compare_if_num(self, other: Self, operator: TokenType) -> Result<Self, LoxValueError> {
-        match (self, other) {
-            (LoxValue::Number(left_num), LoxValue::Number(right_num)) => {
-                let bool_value = match operator {
-                    TokenType::Greater => left_num > right_num,
-                    TokenType::GreaterEqual => left_num >= right_num,
-                    TokenType::Less => left_num < right_num,
-                    TokenType::LessEqual => left_num <= right_num,
-                    _ => {
-                        return Err(LoxValueError::IncorrectOperand(
-                            "Undefined comparator on numbers.".to_string(),
-                        ))
-                    }
-                };
-
-                Ok(LoxValue::Boolean(bool_value))
-            }
-            _ => Err(LoxValueError::IncorrectOperand(
-                "Operands must be numbers.".to_string(),
-            )),
-        }
-    }
-
-    fn is_equal(self, other: Self) -> Self {
-        let bool_value = match (self, other) {
-            (LoxValue::Boolean(left_bool), LoxValue::Boolean(right_bool)) => {
-                left_bool == right_bool
-            }
-            (LoxValue::String(left_str), LoxValue::String(right_str)) => left_str == right_str,
-            (LoxValue::Number(left_num), LoxValue::Number(right_num)) => left_num == right_num,
-            (LoxValue::Nil, LoxValue::Nil) => true,
-            _ => false,
-        };
-
-        LoxValue::Boolean(bool_value)
-    }
-}
-
-impl From<&Literal> for LoxValue {
-    fn from(literal: &Literal) -> Self {
-        match literal {
-            Literal::Str(str) => Self::String(str.clone()),
-            Literal::Num(num) => Self::Number(f64::from(num)),
-            Literal::Nil => Self::Nil,
-            Literal::True => Self::Boolean(true),
-            Literal::False => Self::Boolean(false),
-        }
-    }
-}
-
-impl fmt::Display for LoxValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let text = match self {
-            LoxValue::String(str) => str.clone(),
-            LoxValue::Number(num) => {
-                let mut str_num = num.to_string();
-
-                if str_num.ends_with(".0") {
-                    str_num.pop();
-                    str_num.pop();
-                }
-
-                str_num
-            }
-            LoxValue::Boolean(bool) => bool.to_string(),
-            LoxValue::Nil => "nil".to_string(),
-            LoxValue::Callable(callable) => callable.to_string(),
-        };
-        write!(f, "{text}",)
-    }
-}
-
-impl fmt::Debug for LoxValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LoxValue::Nil => write!(f, "Nil"),
-            LoxValue::Boolean(b) => write!(f, "Boolean({:?})", b),
-            LoxValue::Number(n) => write!(f, "Number({:?})", n),
-            LoxValue::String(s) => write!(f, "String({:?})", s),
-            LoxValue::Callable(_) => write!(f, "Callable(<function>)"),
-        }
-    }
-}
-
-impl PartialEq for LoxValue {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (LoxValue::Nil, LoxValue::Nil) => true,
-            (LoxValue::Boolean(a), LoxValue::Boolean(b)) => a == b,
-            (LoxValue::Number(a), LoxValue::Number(b)) => a == b,
-            (LoxValue::String(a), LoxValue::String(b)) => a == b,
-            // Comparing callables directly is usually not meaningful
-            (LoxValue::Callable(_), LoxValue::Callable(_)) => false,
-            _ => false,
         }
     }
 }
@@ -249,6 +73,9 @@ impl Evaluable for Expr {
                 paren,
                 arguments,
             } => interpreter.evaluate_call(callee, paren, arguments),
+            Expr::Get {object,  name} => interpreter.evaluate_get(object, name),
+            Expr::Set {object,  name, value} => interpreter.evaluate_set(object, name, value),
+            Expr::This {keyword} => interpreter.evaluate_this(keyword),
         }
     }
 }
@@ -279,6 +106,7 @@ impl Evaluable for Stmt {
                 interpreter.interpret_function_stmt(name, params, body)
             }
             Stmt::Return { keyword, value } => interpreter.interpret_return_stmt(keyword, value),
+            Stmt::Class {name, methods} => interpreter.evaluate_class_stmt(name, methods),
         }
     }
 }
@@ -472,17 +300,17 @@ impl Interpreter {
 
         match callee {
             LoxValue::Callable(function) => {
-                if arguments.len() != function.arity() {
+                if arguments.len() != function.borrow().arity() {
                     return Err(RuntimeError::InterpreterPanic(
                         paren.clone(),
                         format!(
                             "Expected {} arguments but got {}.",
-                            function.arity(),
+                            function.borrow().arity(),
                             arguments.len()
                         ),
                     ));
                 }
-                match function.call(self, evaluated_arguments) {
+                match function.borrow().call(self, evaluated_arguments) {
                     Ok(value) => Ok(value), // Normal function return
                     Err(RuntimeError::Return(return_value)) => Ok(return_value), // Handle the return exception
                     Err(err) => Err(err), // Propagate other errors
@@ -493,6 +321,44 @@ impl Interpreter {
                 "Can only call functions and classes.".to_string(),
             )),
         }
+    }
+
+    fn evaluate_get(&mut self, object: &Expr, name: &Token) -> Result<LoxValue, RuntimeError> {
+        let object = self.evaluate(object)?;
+
+        if let LoxValue::Callable(callable) = object {
+            if let Some(instance) = callable.borrow().as_any().downcast_ref::<LoxInstance>() {
+                return LoxInstance::get(Rc::new(RefCell::new(instance.clone())), name);
+            }
+        }
+
+        Err(RuntimeError::InstanceError(
+            name.clone(),
+            "Only instances have fields.".to_string(),
+        ))
+    }
+
+    fn evaluate_set(&mut self, object: &Expr, name: &Token, value: &Expr) -> Result<LoxValue, RuntimeError> {
+        let object = self.evaluate(object)?;
+
+        if let LoxValue::Callable(callable) = object {
+            if let Ok(mut instance) = callable.try_borrow_mut() {
+                if let Some(instance) = instance.as_any_mut().downcast_mut::<LoxInstance>() {
+                    let value = self.evaluate(value)?;
+                    instance.set(name.clone(), value.clone());
+                    return Ok(value);
+                }
+            }
+        }
+
+        Err(RuntimeError::InstanceError(
+            name.clone(),
+            "Only instances have fields.".to_string(),
+        ))
+    }
+
+    fn evaluate_this(&mut self, keyword: &Token) -> Result<LoxValue, RuntimeError> {
+        self.look_up_variable(keyword, Expr::This {keyword: keyword.clone()})
     }
 
     fn evaluate_expression_stmt(&mut self, expr: &Expr) -> Result<LoxValue, RuntimeError> {
@@ -516,10 +382,7 @@ impl Interpreter {
             value = Some(self.evaluate(expr)?);
         }
 
-        let final_value = match value {
-            Some(lox_value) => lox_value,
-            None => LoxValue::Nil,
-        };
+        let final_value = value.unwrap_or_else(|| LoxValue::Nil);
 
         self.environment
             .borrow_mut()
@@ -580,6 +443,26 @@ impl Interpreter {
         Ok(LoxValue::Nil)
     }
 
+    pub fn evaluate_class_stmt(&mut self, name: &Token, methods: &[Stmt],) -> Result<LoxValue, RuntimeError> {
+        self.environment.borrow_mut().define(name.lexeme.clone(), LoxValue::Nil);
+
+        let mut mapped_methods: HashMap<String, LoxValue> = HashMap::new();
+        for method in methods {
+            match method {
+                Stmt::Function {name, params, body} => {
+                    let function = LoxFunction::new(name.clone(), params.clone(), body.clone(), Rc::clone(&self.environment));
+                    mapped_methods.insert(name.lexeme.clone(), LoxValue::Callable(Rc::new(RefCell::new(function))));
+                },
+                _ => panic!("Method's must be functions."),
+            };
+        }
+
+        let rc_refcell_klass = Rc::new(RefCell::new(LoxClass::new(name.lexeme.clone(), mapped_methods)));
+        self.environment.borrow_mut().assign(name, LoxValue::Callable(rc_refcell_klass)).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))?;
+
+        Ok(LoxValue::Nil)
+    }
+
     pub fn interpret_function_stmt(
         &mut self,
         name: &Token,
@@ -593,7 +476,7 @@ impl Interpreter {
             Rc::clone(&self.environment),
         );
 
-        let callable: Rc<dyn LoxCallable> = Rc::new(function);
+        let callable: Rc<RefCell<dyn LoxCallable>> = Rc::new(RefCell::new(function));
 
         self.environment
             .borrow_mut()
