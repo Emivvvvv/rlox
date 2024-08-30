@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_callable::LoxCallable;
+use crate::lox_function::LoxFunction;
 use crate::lox_instance::LoxInstance;
 use crate::lox_value::LoxValue;
 
@@ -30,15 +31,26 @@ impl LoxClass {
 
 impl LoxCallable for LoxClass {
     fn arity(&self) -> usize {
-        0
+        let initializer_option = self.find_method(&"init".to_string());
+        if let Some(initializer) = initializer_option {
+            initializer.extract_callable().unwrap().borrow().arity()
+        } else {
+            0
+        }
     }
 
     fn call(
         &self,
-        _interpreter: &mut Interpreter,
-        _arguments: Vec<LoxValue>,
+        interpreter: &mut Interpreter,
+        arguments: Vec<LoxValue>,
     ) -> Result<LoxValue, RuntimeError> {
         let instance = Rc::new(RefCell::new(LoxInstance::new(self)));
+        let initializer_option = self.find_method(&"init".to_string());
+        if let Some(initializer_value) = initializer_option {
+            if let Some(initializer) = initializer_value.extract_callable().unwrap().borrow().as_any().downcast_ref::<LoxFunction>() {
+                initializer.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
+            }
+        }
         Ok(LoxValue::Callable(instance))
     }
 

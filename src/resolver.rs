@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use rust_decimal_macros::dec;
 use crate::expr::Expr;
 use crate::interpreter::Interpreter;
 use crate::lexer::token::Token;
@@ -69,6 +70,7 @@ impl Resolvable for Stmt {
 #[derive(Copy, Clone, PartialEq)]
 enum FunctionType {
     Function,
+    Initializer,
     Method,
     None,
 }
@@ -237,6 +239,9 @@ impl Resolver {
             lox::error(keyword, "Can't return from top-level code.");
         }
         if let Some(value) = value {
+            if self.current_function == FunctionType::Initializer {
+                lox::error(keyword, "Can't return a value from an initializer.");
+            }
             self.resolve(value)
         }
     }
@@ -264,7 +269,14 @@ impl Resolver {
 
         for method in methods {
             match method {
-                Stmt::Function {name, params, body} => self.resolve_function(name, params, body, FunctionType::Method),
+                Stmt::Function {name, params, body} => {
+                    let declaration = if name.lexeme == "init" {
+                        FunctionType::Initializer
+                    } else {
+                        FunctionType::Method
+                    };
+                    self.resolve_function(name, params, body, declaration)
+                },
                 _ => panic!("Method's must be functions.")
             };
         }

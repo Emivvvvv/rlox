@@ -25,6 +25,7 @@ pub enum RuntimeError {
     UndefinedVariable(Token, EnvironmentError),
     AssignVariableError(Token, EnvironmentError),
     InputError(String),
+    CustomError(String),
     Return(LoxValue),
 }
 
@@ -456,7 +457,7 @@ impl Interpreter {
         for method in methods {
             match method {
                 Stmt::Function {name, params, body} => {
-                    let function = LoxFunction::new(name.clone(), params.clone(), body.clone(), Rc::clone(&self.environment));
+                    let function = LoxFunction::new(name.clone(), params.clone(), body.clone(), Rc::clone(&self.environment), name.lexeme == "init");
                     mapped_methods.insert(name.lexeme.clone(), LoxValue::Callable(Rc::new(RefCell::new(function))));
                 },
                 _ => panic!("Method's must be functions."),
@@ -480,6 +481,7 @@ impl Interpreter {
             params.to_owned(),
             body.to_owned(),
             Rc::clone(&self.environment),
+            false,
         );
 
         let callable: Rc<RefCell<dyn LoxCallable>> = Rc::new(RefCell::new(function));

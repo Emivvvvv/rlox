@@ -11,5 +11,5 @@ Rust implementation of the jlox interpreter from the second chapter of "Crafting
 |      Control Flow      |   ✅    |
 |       Functions        |   ✅    |
 | Resolving and Binding  |   ✅    |
-|        Classes         |   ⏳    |
+|        Classes         |   ✅    |
 |      Inheritance       |   ⏳    |
