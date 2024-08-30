@@ -62,7 +62,7 @@ impl Resolvable for Stmt {
             Stmt::While { condition, body } => resolver.while_stmt(condition, body),
             Stmt::Function { name, params, body } => resolver.function_stmt(name, params, body),
             Stmt::Return { keyword, value } => resolver.return_stmt(keyword, value),
-            Stmt::Class {name, methods} => resolver.class_stmt(name, methods),
+            Stmt::Class {name, superclass, methods} => resolver.class_stmt(name, superclass, methods),
         }
     }
 }
@@ -251,12 +251,21 @@ impl Resolver {
         self.resolve(body);
     }
 
-    fn class_stmt(&mut self, name: &Token, methods: &[Stmt]) {
+    fn class_stmt(&mut self, class_name: &Token, superclass: &Option<Expr>, methods: &[Stmt]) {
         let enclosing_class = self.current_class;
         self.current_class = ClassType::Class;
 
-        self.declare(name);
-        self.define(name);
+        self.declare(class_name);
+        self.define(class_name);
+
+        if let Some(superclass) = superclass {
+            if let Expr::Variable{name} = superclass {
+                if name.lexeme == class_name.lexeme {
+                    lox::error(name, "A class can't inherit from itself.");
+                }
+            }
+            self.resolve(superclass);
+        }
 
         self.begin_scope();
         let scope = self.scopes.last_mut();

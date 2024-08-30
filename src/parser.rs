@@ -1,6 +1,7 @@
 use crate::expr::Expr;
 use crate::lexer::token::{Literal, Token, TokenType};
 use crate::lox;
+use crate::lox_value::LoxValue::Nil;
 use crate::stmt::Stmt;
 
 #[derive(Debug, Clone)]
@@ -53,6 +54,13 @@ impl Parser {
 
     fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
         let name = self.consume(TokenType::Identifier, "Expect class name.")?;
+
+        let mut superclass: Option<Expr> = None;
+        if self.match_types(&[TokenType::Less]) {
+            self.consume(TokenType::Identifier, "Expect superclass name.")?;
+            superclass = Some(Expr::Variable { name: self.previous() });
+        }
+
         self.consume(TokenType::LeftBrace, "Expect '{' before class body.")?;
 
         let mut methods = Vec::new();
@@ -62,7 +70,7 @@ impl Parser {
 
         self.consume(TokenType::RightBrace, "Expect '}' after class body.")?;
 
-        Ok(Stmt::Class {name, methods})
+        Ok(Stmt::Class {name, superclass, methods})
     }
 
     fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {

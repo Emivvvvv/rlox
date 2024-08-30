@@ -9,21 +9,24 @@ use crate::lox_function::LoxFunction;
 use crate::lox_instance::LoxInstance;
 use crate::lox_value::LoxValue;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LoxClass {
     display_name: String,
     name: String,
+    superclass: Option<Box<LoxClass>>,
     methods: HashMap<String, LoxValue>,
 }
 
 impl LoxClass {
     pub fn new(
         name: String,
+        superclass: Option<Box<LoxClass>>,
         methods: HashMap<String, LoxValue>,
     ) -> Self {
         Self {
             display_name: "class ".to_string() + &name,
             name,
+            superclass,
             methods,
         }
     }

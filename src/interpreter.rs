@@ -107,7 +107,7 @@ impl Evaluable for Stmt {
                 interpreter.interpret_function_stmt(name, params, body)
             }
             Stmt::Return { keyword, value } => interpreter.interpret_return_stmt(keyword, value),
-            Stmt::Class {name, methods} => interpreter.evaluate_class_stmt(name, methods),
+            Stmt::Class {name, superclass, methods} => interpreter.evaluate_class_stmt(name, superclass, methods),
         }
     }
 }
@@ -450,7 +450,28 @@ impl Interpreter {
         Ok(LoxValue::Nil)
     }
 
-    pub fn evaluate_class_stmt(&mut self, name: &Token, methods: &[Stmt],) -> Result<LoxValue, RuntimeError> {
+    pub fn evaluate_class_stmt(&mut self, name: &Token, superclass: &Option<Expr>, methods: &[Stmt],) -> Result<LoxValue, RuntimeError> {
+        let mut superclass_option: Option<Box<LoxClass>> = None;
+        if let Some(superclass_expr) = superclass {
+            let superclass_lox_value = self.evaluate(superclass_expr)?;
+
+            let superclass_name = if let Expr::Variable {name} = superclass_expr {
+                name
+            } else {
+                return Err(RuntimeError::CustomError("Superclass must be parsed as Expr::Variable, which means it must have a `name` field.".to_string()))
+            };
+
+            if let LoxValue::Callable(callable) = superclass_lox_value {
+                if let Some(superklass) = callable.borrow().as_any().downcast_ref::<LoxClass>(){
+                    superclass_option = Some(Box::new(superklass.clone()))
+                } else {
+                    lox::error(superclass_name, "Superclass must be a class.");
+                }
+            } {
+                println!("DEBUG: not callable")
+            }
+        }
+
         self.environment.borrow_mut().define(name.lexeme.clone(), LoxValue::Nil);
 
         let mut mapped_methods: HashMap<String, LoxValue> = HashMap::new();
@@ -464,7 +485,7 @@ impl Interpreter {
             };
         }
 
-        let rc_refcell_klass = Rc::new(RefCell::new(LoxClass::new(name.lexeme.clone(), mapped_methods)));
+        let rc_refcell_klass = Rc::new(RefCell::new(LoxClass::new(name.lexeme.clone(), superclass_option ,mapped_methods)));
         self.environment.borrow_mut().assign(name, LoxValue::Callable(rc_refcell_klass)).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))?;
 
         Ok(LoxValue::Nil)
