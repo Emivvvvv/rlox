@@ -1,11 +1,11 @@
 [package]
-name = "rlox"
+name = "rjlox"
 version = "0.1.0"
 authors = ["Emirhan TALA <tala.emirhan@gmail.com>"]
 edition = "2021"
 description = "Rust implementation of the jlox interpreter from the second chapter of 'Crafting Interpreters'."
 license = "MIT"
-readme = "README.md"
+readme = "../README.md"
 repository = "https://github.com/Emivvvvv/rlox"
 
 [dependencies]
