@@ -1,7 +1,7 @@
 use std::env::args;
 use std::process::exit;
 
-use rlox::lox;
+use rjlox::lox;
 
 fn main() {
     let args: Vec<String> = args().collect();

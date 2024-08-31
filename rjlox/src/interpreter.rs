@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use crate::environment::{Environment, EnvironmentError};
@@ -117,7 +117,7 @@ impl Evaluable for Stmt {
 pub struct Interpreter {
     globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
-    locals: HashMap<Expr, usize>,
+    locals: FxHashMap<Expr, usize>,
 }
 
 impl Default for Interpreter {
@@ -138,7 +138,7 @@ impl Interpreter {
         Self {
             globals,
             environment,
-            locals: HashMap::new(),
+            locals: FxHashMap::default(),
         }
     }
 
@@ -496,7 +496,7 @@ impl Interpreter {
             self.environment.borrow_mut().define("super".to_string(), superclass_lox_value);
         }
 
-        let mut mapped_methods: HashMap<String, LoxValue> = HashMap::new();
+        let mut mapped_methods: FxHashMap<String, LoxValue> = FxHashMap::default();
         for method in methods {
             match method {
                 Stmt::Function {name, params, body} => {

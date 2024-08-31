@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use crate::interpreter::{Interpreter, RuntimeError};
@@ -14,17 +14,17 @@ pub struct LoxClass {
     display_name: String,
     name: String,
     superclass: Option<Box<LoxClass>>,
-    methods: HashMap<String, LoxValue>,
+    methods: FxHashMap<String, LoxValue>,
 }
 
 impl LoxClass {
     pub fn new(
         name: String,
         superclass: Option<Box<LoxClass>>,
-        methods: HashMap<String, LoxValue>,
+        methods: FxHashMap<String, LoxValue>,
     ) -> Self {
         Self {
-            display_name: "class ".to_string() + &name,
+            display_name: format!("class {}", name),
             name,
             superclass,
             methods,
@@ -83,14 +83,8 @@ impl LoxClass {
     }
 
     pub fn find_method(&self, name: &String) -> Option<&LoxValue> {
-        if self.methods.contains_key(name) {
-            return self.methods.get(name)
-        }
-
-        if let Some(superclass) = &self.superclass {
-            return superclass.find_method(name)
-        }
-
-        Some(&LoxValue::Nil)
+        self.methods.get(name).or_else(|| {
+            self.superclass.as_ref().and_then(|superclass| superclass.find_method(name))
+        })
     }
 }

@@ -1,7 +1,8 @@
 use std::any::Any;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
+
+use rustc_hash::FxHashMap;
 
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_value::LoxValue;
@@ -14,7 +15,7 @@ use crate::lox_callable::lox_function::LoxFunction;
 pub struct LoxInstance {
     display_name: String,
     klass: LoxClass,
-    fields: HashMap<String, LoxValue>,
+    fields: FxHashMap<String, LoxValue>,
 }
 
 impl LoxInstance {
@@ -22,22 +23,29 @@ impl LoxInstance {
         klass: &LoxClass,
     ) -> Self {
         Self {
-            display_name: klass.get_raw_name().to_string() + " instance",
+            display_name: format!("{} instance", klass.get_raw_name()),
             klass: klass.clone(),
-            fields: HashMap::new(),
+            fields: FxHashMap::default(),
         }
     }
 
     pub fn get(instance: Rc<RefCell<LoxInstance>>, name: &Token) -> Result<LoxValue, RuntimeError> {
-        if let Some(lox_value) = instance.borrow().fields.get(&name.lexeme) {
+        let instance_borrowed = instance.borrow();
+
+        if let Some(lox_value) = instance_borrowed.fields.get(&name.lexeme) {
             return Ok(lox_value.clone());
-        } else if let Some(method) = instance.borrow().klass.find_method(&name.lexeme) {
+        }
+
+        if let Some(method) = instance_borrowed.klass.find_method(&name.lexeme) {
             if let Some(method) = method.extract_callable().unwrap().borrow().as_any().downcast_ref::<LoxFunction>() {
                 return Ok(LoxValue::Callable(Rc::new(RefCell::new(method.bind(instance.clone())))));
             }
         }
 
-        Err(RuntimeError::InstanceError(name.clone(), format!("Undefined property '{}'.", name.lexeme)))
+        Err(RuntimeError::InstanceError(
+            name.clone(),
+            format!("Undefined property '{}'.", name.lexeme),
+        ))
     }
 
     pub fn set(&mut self, name: Token, value: LoxValue) {

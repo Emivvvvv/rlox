@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use crate::lox_value::LoxValue;
@@ -24,21 +24,21 @@ impl EnvironmentError {
 
 #[derive(Debug)]
 pub struct Environment {
-    values: HashMap<String, LoxValue>,
+    values: FxHashMap<String, LoxValue>,
     pub(crate) enclosing: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {
     pub fn new() -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
-            values: HashMap::new(),
+            values: FxHashMap::default(),
             enclosing: None,
         }))
     }
 
     pub fn with_enclosing(enclosing: Rc<RefCell<Environment>>) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
-            values: HashMap::new(),
+            values: FxHashMap::default(),
             enclosing: Some(enclosing),
         }))
     }
@@ -78,57 +78,36 @@ impl Environment {
     }
 
     pub fn get_at(env: Rc<RefCell<Environment>>, distance: usize, name: &String) -> Result<LoxValue, EnvironmentError> {
-        let ancestor_env = Environment::ancestor(env, distance);
-        let value = ancestor_env.borrow().values.get(name).cloned();
-
-        match value {
-            Some(val) => Ok(val),
-            None => Err(EnvironmentError::UndefinedVariable(format!(
-                "Undefined variable '{}' at distance '{}'.",
-                name, distance
-            ))),
-        }
+        Environment::ancestor(env, distance)
+            .borrow()
+            .values
+            .get(name)
+            .cloned()
+            .ok_or_else(|| EnvironmentError::UndefinedVariable(format!(
+                "Undefined variable '{}' at distance '{}'.", name, distance
+            )))
     }
 
-
-    pub fn assign_at(
-        env: Rc<RefCell<Environment>>,
-        distance: usize,
-        name: &Token,
-        value: LoxValue
-    ) -> Result<LoxValue, EnvironmentError> {
-        let binding = Environment::ancestor(env.clone(), distance);
+    pub fn assign_at(env: Rc<RefCell<Environment>>, distance: usize, name: &Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
+        let binding = Environment::ancestor(env, distance);
         let mut ancestor_env = binding.borrow_mut();
 
-        match ancestor_env.values.insert(name.lexeme.clone(), value) {
-            Some(previous_value) => {
-                Ok(previous_value)
-            },
-            None => {
-                Err(EnvironmentError::AssignVariableError(format!(
-                    "Couldn't assign variable '{}' at distance '{}'.",
-                    name.lexeme, distance,
-                )))
-            }
-        }
+        ancestor_env.values.insert(name.lexeme.clone(), value.clone())
+            .ok_or_else(|| EnvironmentError::AssignVariableError(format!(
+                "Couldn't assign variable '{}' at distance '{}'.", name.lexeme, distance
+            )))
     }
 
 
     pub fn ancestor(env: Rc<RefCell<Environment>>, distance: usize) -> Rc<RefCell<Environment>> {
-        if distance == 0 {
-            env
-        } else if distance == 1 {
-            Rc::clone(env.borrow().enclosing.as_ref().expect("No enclosing environment"))
-        } else {
-            let mut environment = Rc::clone(env.borrow().enclosing.as_ref().expect("No enclosing environment"));
-
-            for _ in 1..distance {
-                let parent = environment.borrow().enclosing.clone();
-                environment = parent.expect("Ancestor not found.");
-            }
-
-            environment
+        let mut environment = env;
+        for _ in 0..distance {
+            let next_env = environment.borrow().enclosing.as_ref()
+                .expect("Ancestor not found.")
+                .clone();
+            environment = next_env;
         }
+        environment
     }
 }
 

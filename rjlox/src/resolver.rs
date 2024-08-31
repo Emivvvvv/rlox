@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use crate::expr::Expr;
@@ -85,7 +85,7 @@ enum ClassType {
 
 pub struct Resolver {
     interpreter: Rc<RefCell<Interpreter>>,
-    scopes: Vec<HashMap<String, bool>>,
+    scopes: Vec<FxHashMap<String, bool>>,
     current_function: FunctionType,
     current_class: ClassType,
 }
@@ -111,7 +111,7 @@ impl Resolver {
     }
 
     fn begin_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(FxHashMap::default());
     }
 
     fn end_scope(&mut self) {

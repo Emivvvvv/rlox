@@ -28,7 +28,7 @@ impl LoxFunction {
         is_initializer: bool
     ) -> Self {
         Self {
-            display_name: "fn ".to_string() + &name.lexeme,
+            display_name: format!("fn {}", name.lexeme),
             name,
             params,
             body,
@@ -57,29 +57,10 @@ impl LoxCallable for LoxFunction {
         }
 
         // Execute the function body
-        let result = interpreter.evaluate_block_stmt(&self.body, Some(environment));
-
-        // Handle the Return value
-        match result {
-            Err(RuntimeError::Return(value)) => {
-                // If it's an initializer, return "this"
-                if self.is_initializer {
-                    Environment::get_at(Rc::clone(&self.closure), 0, &"this".to_string())
-                        .map_err(|_| RuntimeError::CustomError("initializer function couldn't find `this`".to_string()))
-                } else {
-                    Ok(value)
-                }
-            }
+        match interpreter.evaluate_block_stmt(&self.body, Some(environment)) {
+            Err(RuntimeError::Return(value)) => self.handle_return(value),
             Err(err) => Err(err), // Propagate other errors
-            Ok(_) => {
-                // If no return is thrown, and it's an initializer, return "this"
-                if self.is_initializer {
-                    Environment::get_at(Rc::clone(&self.closure), 0, &"this".to_string())
-                        .map_err(|_| RuntimeError::CustomError("initializer function couldn't find `this`".to_string()))
-                } else {
-                    Ok(LoxValue::Nil)
-                }
-            }
+            Ok(_) => self.handle_return(LoxValue::Nil),
         }
     }
 
@@ -98,6 +79,17 @@ impl LoxCallable for LoxFunction {
 }
 
 impl LoxFunction {
+    fn handle_return(&self, value: LoxValue) -> Result<LoxValue, RuntimeError> {
+        if self.is_initializer {
+            Environment::get_at(Rc::clone(&self.closure), 0, &"this".to_string())
+                .map_err(|_| {
+                    RuntimeError::CustomError("initializer function couldn't find `this`".to_string())
+                })
+        } else {
+            Ok(value)
+        }
+    }
+
     pub fn get_raw_name(&self) -> &str {
         &self.name.lexeme
     }
