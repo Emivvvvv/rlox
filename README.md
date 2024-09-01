@@ -42,7 +42,7 @@ Rust implementation of the clox interpreter from the third chapter of "Crafting 
 |         Chapter          | Status |
 |:------------------------:|:------:|
 |    Chunks of Bytecode    |   ✅    |
-|    A Virtual Machine     |   ⏳    |
+|    A Virtual Machine     |   ✅    |
 |    Scanning on Demand    |   ⏳    |
 |  Compiling Expressions   |   ⏳    |
 |     Types of Values      |   ⏳    |
