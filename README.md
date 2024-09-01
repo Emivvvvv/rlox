@@ -5,8 +5,16 @@ Rust implementations of the jlox and clox interpreters from the book [Crafting I
 > jlox is a tree-walk interpreter written in Java and clox is a bytecode interpreter written in C.
 > You can see my clox implementation [here](https://github.com/Emivvvvv/clox)
 
-# rjlox roadmap (safe)
+# rjlox roadmap
 Rust implementation of the jlox interpreter from the second chapter of "Crafting Interpreters".
+<br>
+
+> [!IMPORTANT]
+> This code is highly inefficient because I wanted to follow the original jlox implementation as much as possible.
+> This led to many cloning, mem allocations, and free operations. Possible more idiomatic implementation with some
+> small unsafe code might be implemented to enhance the ast interpreter rjlox performance later. Still, my main focus is on implementing [clox](https://github.com/Emivvvvv/clox) and rclox for now.
+
+<br>
 
 |        Chapter         | Status |
 |:----------------------:|:------:|
@@ -21,13 +29,19 @@ Rust implementation of the jlox interpreter from the second chapter of "Crafting
 |        Classes         |   ✅    |
 |      Inheritance       |   ✅    |
 
-# rclox roadmap (unsafe)
+# rclox roadmap
 Rust implementation of the clox interpreter from the third chapter of "Crafting Interpreters".
-The foundation of rclox was inspired by this [implementation](https://github.com/jeschkies/lox-rs/blob/master/bytecode/).
+<br>
+
+> [!IMPORTANT]
+> The foundation of rclox was inspired by this [implementation](https://github.com/jeschkies/lox-rs/blob/master/bytecode/).
+> This implementation is more idiomatic that rjlox, and has some unsafe code to enhance performance.
+
+<br>
 
 |         Chapter          | Status |
 |:------------------------:|:------:|
-|    Chunks of Bytecode    |   ⏳    |
+|    Chunks of Bytecode    |   ✅    |
 |    A Virtual Machine     |   ⏳    |
 |    Scanning on Demand    |   ⏳    |
 |  Compiling Expressions   |   ⏳    |
