@@ -1,7 +1,9 @@
 use std::ptr;
 
 use crate::chunk::{Chunk, OpCode};
-use crate::value::{Value};
+use crate::value::Value;
+
+#[cfg(debug_assertions)]
 use crate::debug::disassemble_instruction;
 
 const STACK_MAX: usize = 256;
@@ -9,7 +11,8 @@ const STACK_MAX: usize = 256;
 pub struct VM<'a> {
     chunk: &'a mut Chunk,
     ip: *const OpCode,
-    stack: Vec<*mut Value>,
+    stack: [*mut Value; STACK_MAX],
+    stack_top: usize,
 }
 
 #[derive(Debug)]
@@ -24,24 +27,37 @@ impl<'a> VM<'a> {
         VM {
             chunk,
             ip: ptr::null(),
-            stack: Vec::with_capacity(STACK_MAX), // allocating 256 slots for preventing
-        }                                         // multiple mem allocations
+            stack: [ptr::null_mut(); STACK_MAX], // Initialize with null pointers
+            stack_top: 0,
+        }
     }
 
+    #[allow(dead_code)]
     fn reset_stack(&mut self) {
-        self.stack.clear();
+        self.stack_top = 0;
     }
 
     fn push(&mut self, value: *mut Value) {
-        self.stack.push(value);
+        if self.stack_top >= STACK_MAX {
+            panic!("Stack overflow!");
+        }
+        self.stack[self.stack_top] = value;
+        self.stack_top += 1;
     }
 
     fn pop(&mut self) -> *mut Value {
-        self.stack.pop().expect("The stack is empty!")
+        if self.stack_top == 0 {
+            panic!("Stack underflow!");
+        }
+        self.stack_top -= 1;
+        self.stack[self.stack_top]
     }
 
     fn peek(&self, distance: usize) -> &*mut Value {
-        &self.stack[self.stack.len() - distance - 1]
+        if self.stack_top == 0 || self.stack_top <= distance {
+            panic!("Stack underflow during peek!");
+        }
+        &self.stack[self.stack_top - distance - 1]
     }
 
     unsafe fn run(&mut self) -> InterpretResult {
@@ -62,8 +78,11 @@ impl<'a> VM<'a> {
             }};
         }
 
+        #[cfg(debug_assertions)]
         let mut offset = 0;
+        #[cfg(debug_assertions)]
         let mut i = 0;
+
         loop {
             let instruction = read_byte!();
 
@@ -88,7 +107,7 @@ impl<'a> VM<'a> {
                 },
                 OpCode::OpReturn => {
                     unsafe {
-                        print!("{}", **&self.pop());
+                        print!("{}", *self.pop());
                     }
                     println!();
                     return InterpretResult::InterpreterOk;
@@ -100,13 +119,17 @@ impl<'a> VM<'a> {
     #[cfg(debug_assertions)]
     fn trace_execution(&self, instruction: &OpCode, i: &mut usize, offset: &mut usize) {
         print!("          ");
-        for slot in &self.stack {
-            unsafe {
-                print!("[ {} ]", **slot);
+        for slot in self.stack.iter().take(self.stack_top) {
+            if !slot.is_null() {
+                unsafe {
+                    print!("[ {} ]", **slot);
+                }
+            } else {
+                print!("Undefined behaviour: reached [ null ] stack slot!");
             }
         }
         println!();
-        disassemble_instruction(&self.chunk, &instruction, *i, offset);
+        disassemble_instruction(self.chunk, instruction, *i, offset);
         *i += 1;
     }
 }
@@ -117,4 +140,3 @@ pub fn interpret(chunk: &mut Chunk) -> InterpretResult {
     vm.ip = ip;
     unsafe { vm.run() }
 }
-

@@ -46,7 +46,7 @@ impl Chunk {
             let value: *const OpCode = &byte;
             ptr::copy_nonoverlapping(
                 value,
-                self.code.offset(self.count as isize),
+                self.code.add(self.count),
                 1)
         }
         self.count += 1;
@@ -77,6 +77,12 @@ impl Chunk {
 
     fn free_array(&mut self) {
         reallocate(self.code, mem::size_of::<u8>() * self.capacity, 0);
+    }
+}
+
+impl Default for Chunk {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -121,7 +127,7 @@ impl<'a> Iterator for ChunkIter<'a> {
                 result = self
                     .chunk
                     .code
-                    .offset(self.offset as isize)
+                    .add(self.offset)
                     .as_ref()
                     .expect("Could not read OpCode.");
             }
