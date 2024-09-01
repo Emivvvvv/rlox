@@ -1,4 +1,3 @@
-use std::ops::Add;
 use std::ptr;
 
 use crate::chunk::{Chunk, OpCode};
@@ -8,9 +7,9 @@ use crate::debug::disassemble_instruction;
 const STACK_MAX: usize = 256;
 
 pub struct VM<'a> {
-    chunk: &'a Chunk,
+    chunk: &'a mut Chunk,
     ip: *const OpCode,
-    stack: Vec<Value>,
+    stack: Vec<*mut Value>,
 }
 
 #[derive(Debug)]
@@ -21,27 +20,27 @@ pub enum InterpretResult {
 }
 
 impl<'a> VM<'a> {
-    pub fn new(chunk: &'a Chunk) -> Self {
+    pub fn new(chunk: &'a mut Chunk) -> Self {
         VM {
             chunk,
             ip: ptr::null(),
-            stack: Vec::with_capacity(256), // allocating 256 slots for preventing
-        }                                           // multiple mem allocations
+            stack: Vec::with_capacity(STACK_MAX), // allocating 256 slots for preventing
+        }                                         // multiple mem allocations
     }
 
     fn reset_stack(&mut self) {
         self.stack.clear();
     }
 
-    fn push(&mut self, value: Value) {
+    fn push(&mut self, value: *mut Value) {
         self.stack.push(value);
     }
 
-    fn pop(&mut self) -> Value {
+    fn pop(&mut self) -> *mut Value {
         self.stack.pop().expect("The stack is empty!")
     }
 
-    fn peek(&self, distance: usize) -> &Value {
+    fn peek(&self, distance: usize) -> &*mut Value {
         &self.stack[self.stack.len() - distance - 1]
     }
 
@@ -58,7 +57,8 @@ impl<'a> VM<'a> {
             ($op:tt) => {{
                 let b = self.pop();
                 let a = self.pop();
-                self.push(a $op b);
+                let _ = &mut *a $op &mut *b;
+                self.push(a);
             }};
         }
 
@@ -74,18 +74,22 @@ impl<'a> VM<'a> {
 
             match *instruction {
                 OpCode::OpConstant(constant) => {
-                    self.push(self.chunk.constants[constant].clone()); //TODO
+                    let value_ptr = &mut self.chunk.constants[constant] as *mut Value;
+                    self.push(value_ptr);
                 }
                 OpCode::OpAdd => binary_op!(+),
                 OpCode::OpSubtract => binary_op!(-),
                 OpCode::OpMultiply => binary_op!(*),
                 OpCode::OpDivide => binary_op!(/),
                 OpCode::OpNegate => {
-                    let negate = -self.pop();
-                    self.push(negate);
+                    unsafe {
+                        let _ = -&mut **self.peek(0);
+                    }
                 },
                 OpCode::OpReturn => {
-                    print!("{}", &self.pop());
+                    unsafe {
+                        print!("{}", **&self.pop());
+                    }
                     println!();
                     return InterpretResult::InterpreterOk;
                 }
@@ -97,7 +101,9 @@ impl<'a> VM<'a> {
     fn trace_execution(&self, instruction: &OpCode, i: &mut usize, offset: &mut usize) {
         print!("          ");
         for slot in &self.stack {
-            print!("[ {} ]", slot);
+            unsafe {
+                print!("[ {} ]", **slot);
+            }
         }
         println!();
         disassemble_instruction(&self.chunk, &instruction, *i, offset);
@@ -105,9 +111,10 @@ impl<'a> VM<'a> {
     }
 }
 
-pub fn interpret(chunk: &Chunk) -> InterpretResult {
+pub fn interpret(chunk: &mut Chunk) -> InterpretResult {
+    let ip = chunk.code;
     let mut vm = VM::new(chunk);
-    vm.ip = chunk.code;
+    vm.ip = ip;
     unsafe { vm.run() }
 }
 

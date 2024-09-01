@@ -79,10 +79,10 @@ impl PartialEq for Value {
     }
 }
 
-impl Add for Value {
+impl Add for &mut Value {
     type Output = Self;
 
-    fn add(mut self, other: Self) -> Self::Output {
+    fn add(self, other: Self) -> Self::Output {
         match (&self.typ, &other.typ) {
             (ValueType::Number, ValueType::Number) => self._as = V {number: self.as_number() + other.as_number()},
             _ => panic!("undefined behaviour")
@@ -91,10 +91,10 @@ impl Add for Value {
     }
 }
 
-impl Sub for Value {
+impl Sub for &mut Value {
     type Output = Self;
 
-    fn sub(mut self, other: Self) -> Self::Output {
+    fn sub(self, other: Self) -> Self::Output {
         match (&self.typ, &other.typ) {
             (ValueType::Number, ValueType::Number) => self._as = V {number: self.as_number() - other.as_number()},
             _ => panic!("undefined behaviour")
@@ -103,10 +103,10 @@ impl Sub for Value {
     }
 }
 
-impl Mul for Value {
+impl Mul for &mut Value {
     type Output = Self;
 
-    fn mul(mut self, other: Self) -> Self::Output {
+    fn mul(self, other: Self) -> Self::Output {
         match (&self.typ, &other.typ) {
             (ValueType::Number, ValueType::Number) => self._as = V {number: self.as_number() * other.as_number()},
             _ => panic!("undefined behaviour")
@@ -115,10 +115,10 @@ impl Mul for Value {
     }
 }
 
-impl Div for Value {
+impl Div for &mut Value {
     type Output = Self;
 
-    fn div(mut self, other: Self) -> Self::Output {
+    fn div(self, other: Self) -> Self::Output {
         match (&self.typ, &other.typ) {
             (ValueType::Number, ValueType::Number) => self._as = V {number: self.as_number() / other.as_number()},
             _ => panic!("undefined behaviour")
@@ -127,10 +127,10 @@ impl Div for Value {
     }
 }
 
-impl Neg for Value {
+impl Neg for &mut Value {
     type Output = Self;
 
-    fn neg(mut self) -> Self::Output {
+    fn neg(self) -> Self::Output {
         match &self.typ {
             ValueType::Number => self._as = V {number: -self.as_number()},
             _ => panic!("undefined behaviour")

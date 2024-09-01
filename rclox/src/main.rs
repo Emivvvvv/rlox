@@ -21,5 +21,5 @@ fn main() {
     chunk.write_chunk(OpCode::OpReturn, 123);
 
     // Interpret the chunk
-    let _ = interpret(&chunk);
+    let _ = interpret(&mut chunk);
 }
