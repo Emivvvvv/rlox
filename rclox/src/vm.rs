@@ -1,17 +1,16 @@
+use std::ops::Add;
 use std::ptr;
 
 use crate::chunk::{Chunk, OpCode};
-use crate::value::{Value, print_value};
+use crate::value::{Value};
 use crate::debug::disassemble_instruction;
 
 const STACK_MAX: usize = 256;
-static STACK: [Value; STACK_MAX] = [Value::Number(0.0); STACK_MAX];
 
 pub struct VM<'a> {
     chunk: &'a Chunk,
     ip: *const OpCode,
     stack: Vec<Value>,
-    // I don't like using Vec here, I'll try to implement an array based stack later.
 }
 
 #[derive(Debug)]
@@ -26,8 +25,8 @@ impl<'a> VM<'a> {
         VM {
             chunk,
             ip: ptr::null(),
-            stack: Vec::with_capacity(STACK_MAX),
-        }
+            stack: Vec::with_capacity(256), // allocating 256 slots for preventing
+        }                                           // multiple mem allocations
     }
 
     fn reset_stack(&mut self) {
@@ -75,7 +74,7 @@ impl<'a> VM<'a> {
 
             match *instruction {
                 OpCode::OpConstant(constant) => {
-                    self.push(self.chunk.constants[constant]);
+                    self.push(self.chunk.constants[constant].clone()); //TODO
                 }
                 OpCode::OpAdd => binary_op!(+),
                 OpCode::OpSubtract => binary_op!(-),
@@ -86,7 +85,7 @@ impl<'a> VM<'a> {
                     self.push(negate);
                 },
                 OpCode::OpReturn => {
-                    print_value(&self.pop());
+                    print!("{}", &self.pop());
                     println!();
                     return InterpretResult::InterpreterOk;
                 }
