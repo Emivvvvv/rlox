@@ -101,14 +101,10 @@ impl<'a> VM<'a> {
                 OpCode::OpMultiply => binary_op!(*),
                 OpCode::OpDivide => binary_op!(/),
                 OpCode::OpNegate => {
-                    unsafe {
-                        let _ = -&mut **self.peek(0);
-                    }
+                    let _ = -&mut **self.peek(0);
                 },
                 OpCode::OpReturn => {
-                    unsafe {
-                        print!("{}", *self.pop());
-                    }
+                    print!("{}", *self.pop());
                     println!();
                     return InterpretResult::InterpreterOk;
                 }
