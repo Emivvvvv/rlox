@@ -37,7 +37,11 @@ pub fn disassemble_instruction(chunk: &Chunk, instruction: &OpCode, i: usize, of
     }
     match instruction {
         OpCode::OpConstant(constant_index) => constant_instruction("OP_CONSTANT", chunk, *constant_index, offset),
+        OpCode::OpAdd => simple_instruction("OpReturn", offset),
+        OpCode::OpSubtract => simple_instruction("OpSubtract", offset),
+        OpCode::OpMultiply => simple_instruction("OpMultiply", offset),
+        OpCode::OpDivide => simple_instruction("OpDivide", offset),
+        OpCode::OpNegate => simple_instruction("OpNegate", offset),
         OpCode::OpReturn => simple_instruction("OpReturn", offset),
-        _ => println!("Unknown opcode {:?}", instruction),
     }
 }

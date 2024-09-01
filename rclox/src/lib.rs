@@ -1,4 +1,5 @@
 pub mod chunk;
 mod memory;
 pub mod debug;
-mod value;
+pub mod value;
+pub mod vm;

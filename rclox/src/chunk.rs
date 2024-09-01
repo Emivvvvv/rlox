@@ -6,6 +6,11 @@ use crate::value::{Value, ValueArray};
 #[derive(Debug)]
 pub enum OpCode {
     OpConstant(usize),
+    OpAdd,
+    OpSubtract,
+    OpMultiply,
+    OpDivide,
+    OpNegate,
     OpReturn,
 }
 
@@ -42,7 +47,7 @@ impl Chunk {
             ptr::copy_nonoverlapping(
                 value,
                 self.code.offset(self.count as isize),
-                mem::size_of::<OpCode>())
+                1)
         }
         self.count += 1;
 
@@ -87,7 +92,8 @@ impl Drop for Chunk {
     }
 }
 
-// might need to be modified or removed, because offsets are not correct with this implementation.
+// might need to be modified to achieve clox like offset.
+// change is not necessary for now.
 impl<'a> IntoIterator for &'a Chunk {
     type Item = &'a OpCode;
     type IntoIter = ChunkIter<'a>;
