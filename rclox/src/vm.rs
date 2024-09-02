@@ -1,6 +1,7 @@
 use std::ptr;
 
 use crate::chunk::{Chunk, OpCode};
+use crate::compiler::Compiler;
 use crate::value::Value;
 
 #[cfg(debug_assertions)]
@@ -16,10 +17,9 @@ pub struct VM<'a> {
 }
 
 #[derive(Debug)]
-pub enum InterpretResult {
-    InterpreterOk,
-    InterpreterCompileError,
-    InterpreterRuntimeError,
+pub enum InterpretError {
+    CompileError,
+    RuntimeError,
 }
 
 impl<'a> VM<'a> {
@@ -60,7 +60,7 @@ impl<'a> VM<'a> {
         &self.stack[self.stack_top - distance - 1]
     }
 
-    unsafe fn run(&mut self) -> InterpretResult {
+    unsafe fn run(&mut self) -> Result<(), InterpretError> {
         macro_rules! read_byte {
             () => ({
                 let byte = &*self.ip;
@@ -106,7 +106,7 @@ impl<'a> VM<'a> {
                 OpCode::OpReturn => {
                     print!("{}", *self.pop());
                     println!();
-                    return InterpretResult::InterpreterOk;
+                    return Ok(());
                 }
             }
         }
@@ -130,9 +130,15 @@ impl<'a> VM<'a> {
     }
 }
 
-pub fn interpret(chunk: &mut Chunk) -> InterpretResult {
-    let ip = chunk.code;
-    let mut vm = VM::new(chunk);
-    vm.ip = ip;
-    unsafe { vm.run() }
+// pub fn interpret(chunk: &mut Chunk) -> InterpretResult {
+//     let ip = chunk.code;
+//     let mut vm = VM::new(chunk);
+//     vm.ip = ip;
+//     unsafe { vm.run() }
+// }
+
+pub fn interpret(source: &str) -> Result<(), InterpretError> {
+    let mut compiler = Compiler::new(source);
+    compiler.compile();
+    Ok(())
 }

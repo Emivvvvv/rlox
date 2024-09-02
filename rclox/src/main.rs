@@ -1,25 +1,68 @@
-use rclox::chunk::{Chunk, OpCode};
-use rclox::value::Value;
-use rclox::vm::interpret;
+use std::env;
+use std::process::exit;
+use std::fs::File;
+use std::io::{self, BufRead, Read};
+use rclox::vm::{interpret, InterpretError};
 
 fn main() {
-    let mut chunk = Chunk::new();
+    let args: Vec<String> = env::args().collect();
 
-    let constant = chunk.add_constant(Value::new_number(1.2));
-    chunk.write_chunk(OpCode::OpConstant(constant), 123);
-    let constant = chunk.add_constant(Value::new_number(3.4));
-    chunk.write_chunk(OpCode::OpConstant(constant), 123);
+    let result= match args.len() {
+        1 => repl(),
+        2 => run_file(&args[1]),
+        _ => {
+            eprintln!("Usage: clox [path]");
+            exit(64);
+        }
+    };
 
-    chunk.write_chunk(OpCode::OpAdd, 123);
+    match result {
+        Ok(_) => {}
+        Err(interpret_err) => match interpret_err {
+            InterpretError::CompileError => exit(65),
+            InterpretError::RuntimeError => exit(70),
+        }
+    }
+}
 
-    let constant = chunk.add_constant(Value::new_number(5.6));
-    chunk.write_chunk(OpCode::OpConstant(constant), 123);
 
-    chunk.write_chunk(OpCode::OpDivide, 123);
-    chunk.write_chunk(OpCode::OpNegate, 123);
+fn repl() -> Result<(), InterpretError> {
+    let stdin = io::stdin();
+    let mut line = String::new();
 
-    chunk.write_chunk(OpCode::OpReturn, 123);
+    loop {
+        print!("> ");
+        io::Write::flush(&mut io::stdout()).expect("Failed to flush stdout");
 
-    // Interpret the chunk
-    let _ = interpret(&mut chunk);
+        line.clear();
+        if stdin.lock().read_line(&mut line).is_err() {
+            panic!("Error while reading input.");
+        }
+
+        // clox implementation don't have .trim() here.
+        match interpret(&line.trim()) {
+            Ok(()) => {},
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+fn read_file(path: &str) -> String {
+    let mut file = File::open(path).unwrap_or_else(|_| {
+        eprintln!("Could not open file \"{}\".", path);
+        exit(74);
+    });
+
+    let mut buffer = String::new();
+    file.read_to_string(&mut buffer).unwrap_or_else(|_| {
+        eprintln!("Could not read file \"{}\".", path);
+        exit(74);
+    });
+
+    buffer
+}
+
+fn run_file(path: &str) -> Result<(), InterpretError> {
+    let source = read_file(path);
+    interpret(&source)
 }
