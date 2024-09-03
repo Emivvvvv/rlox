@@ -79,7 +79,7 @@ impl LoxValue {
         LoxValue::Boolean(true)
     }
 
-    pub(crate) fn math_if_num(self, other: Self, operator: TokenType) -> Result<Self, LoxValueError> {
+    pub(crate) fn math_if_num(self, other: Self, operator: &TokenType) -> Result<Self, LoxValueError> {
         match (self, other) {
             (LoxValue::Number(left_num), LoxValue::Number(right_num)) => {
                 let result = match operator {

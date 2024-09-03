@@ -62,7 +62,7 @@ impl Evaluable for Expr {
             Expr::Unary { operator, right } => interpreter.evaluate_unary(operator, right),
             Expr::Literal { value } => Ok(Interpreter::evaluate_literal(value)),
             Expr::Grouping { expression } => interpreter.evaluate(expression),
-            Expr::Variable { name } => interpreter.evaluate_variable(name),
+            Expr::Variable { name } => interpreter.evaluate_variable(self, name),
             Expr::Assign { name, value } => interpreter.evaluate_assign(name, value),
             Expr::Logical {
                 left,
@@ -76,8 +76,8 @@ impl Evaluable for Expr {
             } => interpreter.evaluate_call(callee, paren, arguments),
             Expr::Get {object,  name} => interpreter.evaluate_get(object, name),
             Expr::Set {object,  name, value} => interpreter.evaluate_set(object, name, value),
-            Expr::This {keyword} => interpreter.evaluate_this(keyword),
-            Expr::Super {keyword, method} => interpreter.evaluate_super(keyword, method),
+            Expr::This {keyword} => interpreter.evaluate_this(self, keyword),
+            Expr::Super {keyword, method} => interpreter.evaluate_super(self, keyword, method),
         }
     }
 }
@@ -190,7 +190,7 @@ impl<'a> Interpreter<'a> {
 
         match operator.token_type {
             TokenType::Minus | TokenType::Slash | TokenType::Star => left
-                .math_if_num(right, operator.token_type.clone())
+                .math_if_num(right, &operator.token_type)
                 .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e)),
             TokenType::Plus => match (&left, &right) {
                 (LoxValue::String(left_str), LoxValue::String(right_str)) => {
@@ -198,7 +198,7 @@ impl<'a> Interpreter<'a> {
                 }
                 (LoxValue::Number(_), LoxValue::Number(_)) => {
                     left
-                        .math_if_num(right, TokenType::Plus)
+                        .math_if_num(right, &TokenType::Plus)
                         .map_err(|e| RuntimeError::IncorrectOperand(operator.clone(), e))
                 }
                 _ => Ok(LoxValue::String(format!("{left}{right}"))),
@@ -238,11 +238,11 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    fn evaluate_variable(&mut self, name: &Token) -> Result<LoxValue, RuntimeError> {
-        self.look_up_variable(name, Expr::Variable { name: name.clone() })
+    fn evaluate_variable(&mut self, expr: &Expr, name: &Token) -> Result<LoxValue, RuntimeError> {
+        self.look_up_variable(name, expr)
     }
 
-    fn look_up_variable(&mut self, name: &Token, expr: Expr) -> Result<LoxValue, RuntimeError> {
+    fn look_up_variable(&mut self, name: &Token, expr: &Expr) -> Result<LoxValue, RuntimeError> {
         match self.locals.get(&expr) {
             Some(distance) => {
                 // Call get_at with the environment wrapped in Rc<RefCell<Environment>>
@@ -363,12 +363,12 @@ impl<'a> Interpreter<'a> {
         ))
     }
 
-    fn evaluate_this(&mut self, keyword: &Token) -> Result<LoxValue, RuntimeError> {
-        self.look_up_variable(keyword, Expr::This {keyword: keyword.clone()})
+    fn evaluate_this(&mut self, expr: &Expr, keyword: &Token) -> Result<LoxValue, RuntimeError> {
+        self.look_up_variable(keyword, expr)
     }
 
-    fn evaluate_super(&mut self, keyword: &Token, method: &Token) -> Result<LoxValue, RuntimeError> {
-        let distance = self.locals.get(&Expr::Super {keyword: keyword.clone(), method: method.clone()}).unwrap();
+    fn evaluate_super(&mut self, expr: &Expr, keyword: &Token, method: &Token) -> Result<LoxValue, RuntimeError> {
+        let distance = self.locals.get(expr).unwrap();
 
 
         let superclass_lox_value = Environment::get_at(Rc::clone(&self.environment), *distance, &"super".to_string()).map_err(|e| RuntimeError::UndefinedVariable(keyword.clone(), e))?;
