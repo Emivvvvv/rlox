@@ -5,11 +5,9 @@ use std::rc::Rc;
 use rustc_hash::FxHashMap;
 
 use crate::interpreter::{Interpreter, RuntimeError};
-use crate::lox_value::LoxValue;
+use crate::lox_value::{LoxCallable, LoxValue};
 use crate::lexer::token::Token;
-use crate::lox_callable::lox_callable::LoxCallable;
 use crate::lox_callable::lox_class::LoxClass;
-use crate::lox_callable::lox_function::LoxFunction;
 
 #[derive(Clone, Debug)]
 pub struct LoxInstance {
@@ -36,9 +34,11 @@ impl LoxInstance {
             return Ok(lox_value.clone());
         }
 
-        if let Some(method) = instance_borrowed.klass.find_method(&name.lexeme) {
-            if let Some(method) = method.extract_callable().unwrap().borrow().as_any().downcast_ref::<LoxFunction>() {
-                return Ok(LoxValue::Callable(Rc::new(RefCell::new(method.bind(instance.clone())))));
+        if let Some(method_lox_value) = instance_borrowed.klass.find_method(&name.lexeme) {
+            if let LoxValue::Callable(callable) = method_lox_value {
+                if let LoxCallable::Function(method) = callable {
+                    return Ok(LoxValue::Callable(LoxCallable::Function(Rc::clone(method))));
+                }
             }
         }
 
@@ -53,7 +53,7 @@ impl LoxInstance {
     }
 }
 
-impl LoxCallable for LoxInstance {
+impl LoxInstance {
     fn arity(&self) -> usize {
         0
     }
@@ -66,7 +66,7 @@ impl LoxCallable for LoxInstance {
         todo!()
     }
 
-    fn get_name(&self) -> &str {
+    pub(crate) fn get_name(&self) -> &str {
         &self.display_name
     }
 

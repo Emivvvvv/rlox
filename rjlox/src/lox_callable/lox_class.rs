@@ -1,13 +1,10 @@
 use std::any::Any;
-use std::cell::RefCell;
 use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use crate::interpreter::{Interpreter, RuntimeError};
-use crate::lox_callable::lox_callable::LoxCallable;
-use crate::lox_callable::lox_function::LoxFunction;
 use crate::lox_callable::lox_instance::LoxInstance;
-use crate::lox_value::LoxValue;
+use crate::lox_value::{LoxCallable, LoxValue};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoxClass {
@@ -32,13 +29,13 @@ impl LoxClass {
     }
 }
 
-impl LoxCallable for LoxClass {
+impl LoxClass {
     fn arity(&self) -> usize {
         let initializer_option = self.find_method(&"init".to_string());
         if let Some(initializer_value) = initializer_option {
-            if let Some(callable) = initializer_value.extract_callable() {
-                if let Some(function) = callable.borrow().as_any().downcast_ref::<LoxFunction>() {
-                    return function.arity();
+            if let LoxValue::Callable(callable) = initializer_value {
+                if let LoxCallable::Function(init_func) = callable {
+                    return init_func.arity();
                 }
             }
         }
@@ -51,20 +48,21 @@ impl LoxCallable for LoxClass {
         interpreter: &mut Interpreter,
         arguments: Vec<LoxValue>,
     ) -> Result<LoxValue, RuntimeError> {
-        let instance = Rc::new(RefCell::new(LoxInstance::new(self)));
+        let instance = Rc::new(LoxInstance::new(self));
+
         let initializer_option = self.find_method(&"init".to_string());
         if let Some(initializer_value) = initializer_option {
-            if let Some(callable) = initializer_value.extract_callable() {
-                if let Some(initializer) = callable.borrow().as_any().downcast_ref::<LoxFunction>() {
-                    initializer.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
+            if let LoxValue::Callable(callable) = initializer_value {
+                if let LoxCallable::Function(init_func) = callable {
+                    init_func.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
                 }
             }
         }
 
-        Ok(LoxValue::Callable(instance))
+        Ok(LoxValue::Callable(LoxCallable::Instance(instance)))
     }
 
-    fn get_name(&self) -> &str {
+    pub(crate) fn get_name(&self) -> &str {
         &self.display_name
     }
 

@@ -1,9 +1,11 @@
-use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
+use crate::globals::{ClockFunction, InputFunction};
 use crate::lexer::token::{Literal, TokenType};
-use crate::lox_callable::lox_callable::LoxCallable;
+use crate::lox_callable::lox_class::LoxClass;
+use crate::lox_callable::lox_function::LoxFunction;
+use crate::lox_callable::lox_instance::LoxInstance;
 
 #[derive(Debug)]
 pub enum LoxValueError {
@@ -20,47 +22,28 @@ impl LoxValueError {
         }
     }
 }
+
+#[derive(Clone)]
+pub enum NativeFunctions {
+    ClockFunction(Rc<ClockFunction>),
+    InputFunction(Rc<InputFunction>),
+}
+
+#[derive(Clone)]
+pub enum LoxCallable {
+    Function(Rc<LoxFunction>),
+    Class(Rc<LoxClass>),
+    Instance(Rc<LoxInstance>),
+    NativeFunction(NativeFunctions),
+}
+
 #[derive(Clone)]
 pub enum LoxValue {
     Nil,
     Boolean(bool),
     Number(f64),
     String(String),
-    Callable(Rc<RefCell<dyn LoxCallable>>),
-}
-
-impl LoxValue {
-    pub fn extract_boolean(&self) -> Option<bool> {
-        if let LoxValue::Boolean(value) = self {
-            Some(*value)
-        } else {
-            None
-        }
-    }
-
-    pub fn extract_number(&self) -> Option<f64> {
-        if let LoxValue::Number(value) = self {
-            Some(*value)
-        } else {
-            None
-        }
-    }
-
-    pub fn extract_string(&self) -> Option<&String> {
-        if let LoxValue::String(value) = self {
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    pub fn extract_callable(&self) -> Option<&Rc<RefCell<dyn LoxCallable>>> {
-        if let LoxValue::Callable(callable) = self {
-            Some(callable)
-        } else {
-            None
-        }
-    }
+    Callable(LoxCallable),
 }
 
 impl LoxValue {
@@ -188,7 +171,15 @@ impl fmt::Display for LoxValue {
             }
             LoxValue::Boolean(bool) => bool.to_string(),
             LoxValue::Nil => "nil".to_string(),
-            LoxValue::Callable(callable) => callable.borrow().to_string(),
+            LoxValue::Callable(callable) => match callable {
+                LoxCallable::Function(function) => Rc::clone(function).get_name(),
+                LoxCallable::Class(class) => Rc::clone(class).get_name(),
+                LoxCallable::Instance(instance) => Rc::clone(instance).get_name(),
+                LoxCallable::NativeFunction(native_function) => match native_function {
+                    NativeFunctions::ClockFunction(clock) => Rc::clone(clock).get_name(),
+                    NativeFunctions::InputFunction(input) => Rc::clone(input).get_name(),
+                }
+            }.to_string(),
         };
         write!(f, "{text}",)
     }
@@ -201,7 +192,20 @@ impl fmt::Debug for LoxValue {
             LoxValue::Boolean(b) => write!(f, "Boolean({:?})", b),
             LoxValue::Number(n) => write!(f, "Number({:?})", n),
             LoxValue::String(s) => write!(f, "String({:?})", s),
-            LoxValue::Callable(c) => write!(f, "Callable(<{}>)", c.borrow()),
+            LoxValue::Callable(c) => {
+                let str = match c {
+                    LoxCallable::Function(function) => Rc::clone(function).get_name(),
+                    LoxCallable::Class(class) => Rc::clone(class).get_name(),
+                    LoxCallable::Instance(instance) => Rc::clone(instance).get_name(),
+                    LoxCallable::NativeFunction(native_function) => match native_function {
+                        NativeFunctions::ClockFunction(clock) => Rc::clone(clock).get_name(),
+                        NativeFunctions::InputFunction(input) => Rc::clone(input).get_name(),
+                    }
+                };
+
+                write!(f, "Callable(<{str}>)")
+            },
+
         }
     }
 }

@@ -4,18 +4,17 @@ use std::rc::Rc;
 
 use crate::environment::Environment;
 use crate::interpreter::{Interpreter, RuntimeError};
-use crate::lox_value::LoxValue;
-use crate::lox_callable::lox_callable::LoxCallable;
+use crate::lox_value::{LoxCallable, LoxValue, NativeFunctions};
 
 pub fn define_globals(global_environment: &Rc<RefCell<Environment>>) {
     global_environment.borrow_mut().define(
         "clock".to_string(),
-        LoxValue::Callable(Rc::new(RefCell::new(ClockFunction))),
+        LoxValue::Callable(LoxCallable::NativeFunction(NativeFunctions::ClockFunction(Rc::new(ClockFunction)))),
     );
 
     global_environment.borrow_mut().define(
         "input".to_string(),
-        LoxValue::Callable(Rc::new(RefCell::new(InputFunction))),
+        LoxValue::Callable(LoxCallable::NativeFunction(NativeFunctions::InputFunction(Rc::new(InputFunction)))),
     );
 }
 
@@ -23,7 +22,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct ClockFunction;
 
-impl LoxCallable for ClockFunction {
+impl ClockFunction {
     fn arity(&self) -> usize {
         0
     }
@@ -40,7 +39,7 @@ impl LoxCallable for ClockFunction {
         Ok(LoxValue::Number(since_the_epoch.as_secs_f64()))
     }
 
-    fn get_name(&self) -> &str {
+    pub(crate) fn get_name(&self) -> &str {
         "<native fn clock>"
     }
 
@@ -58,7 +57,7 @@ use std::io::Write;
 
 pub struct InputFunction;
 
-impl LoxCallable for InputFunction {
+impl InputFunction {
     fn arity(&self) -> usize {
         1
     }
@@ -84,7 +83,7 @@ impl LoxCallable for InputFunction {
         Ok(LoxValue::String(input.trim().to_string())) // Trim the input and return as LoxValue::String
     }
 
-    fn get_name(&self) -> &str {
+    pub fn get_name(&self) -> &str {
         "<native fn input>"
     }
 

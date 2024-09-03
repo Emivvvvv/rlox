@@ -9,7 +9,6 @@ use crate::lexer::token::Literal;
 use crate::lexer::token::Token;
 use crate::lexer::token::TokenType;
 use crate::lox;
-use crate::lox_callable::lox_callable::LoxCallable;
 use crate::lox_callable::lox_function::LoxFunction;
 use crate::stmt::Stmt;
 use crate::lox_value::{LoxValue, LoxValueError};

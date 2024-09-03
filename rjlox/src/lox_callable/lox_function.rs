@@ -4,9 +4,8 @@ use std::rc::Rc;
 
 use crate::environment::Environment;
 use crate::interpreter::{Interpreter, RuntimeError};
-use crate::lox_value::LoxValue;
+use crate::lox_value::{LoxCallable, LoxValue};
 use crate::lexer::token::Token;
-use crate::lox_callable::lox_callable::LoxCallable;
 use crate::lox_callable::lox_instance::LoxInstance;
 use crate::stmt::Stmt;
 
@@ -38,13 +37,13 @@ impl LoxFunction {
     }
 }
 
-impl LoxCallable for LoxFunction {
+impl LoxFunction {
 
-    fn arity(&self) -> usize {
+    pub(crate) fn arity(&self) -> usize {
         self.params.len()
     }
 
-    fn call(
+    pub(crate) fn call(
         &self,
         interpreter: &mut Interpreter,
         arguments: Vec<LoxValue>,
@@ -65,7 +64,7 @@ impl LoxCallable for LoxFunction {
     }
 
 
-    fn get_name(&self) -> &str {
+    pub(crate) fn get_name(&self) -> &str {
         &self.display_name
     }
 
@@ -94,9 +93,9 @@ impl LoxFunction {
         &self.name.lexeme
     }
 
-    pub fn bind(&self, rc_refcell_instance: Rc<RefCell<LoxInstance>>) -> LoxFunction {
+    pub fn bind(&self, rc_instance: Rc<LoxInstance>) -> LoxFunction {
         let environment = Environment::with_enclosing(Rc::clone(&self.closure));
-        environment.borrow_mut().define("this".to_string(), LoxValue::Callable(rc_refcell_instance.clone()));
+        environment.borrow_mut().define("this".to_string(), LoxValue::Callable(LoxCallable::Instance(rc_instance)));
 
         LoxFunction {
             display_name: self.display_name.clone(),
