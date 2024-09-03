@@ -11,12 +11,12 @@ pub enum ResolveError {
     Error(String),
 }
 
-pub trait Resolvable {
-    fn resolve(&self, resolver: &mut Resolver);
+pub trait Resolvable<'a> {
+    fn resolve(&'a self, resolver: &mut Resolver<'a>);
 }
 
-impl Resolvable for Expr {
-    fn resolve(&self, resolver: &mut Resolver) {
+impl<'a> Resolvable<'a> for Expr {
+    fn resolve(&'a self, resolver: &mut Resolver<'a>) {
         match self {
             Expr::Binary {
                 left,
@@ -26,8 +26,8 @@ impl Resolvable for Expr {
             Expr::Grouping { expression } => resolver.grouping_expr(expression),
             Expr::Literal { value: _value } => (),
             Expr::Unary { operator, right } => resolver.unary_expr(operator, right),
-            Expr::Variable { name } => resolver.variable_expr(name),
-            Expr::Assign { name, value } => resolver.assign_expr(name, value),
+            Expr::Variable { name } => resolver.variable_expr(self, name),
+            Expr::Assign { name, value } => resolver.assign_expr(self, name, value),
             Expr::Logical {
                 left,
                 operator,
@@ -40,14 +40,14 @@ impl Resolvable for Expr {
             } => resolver.call_expr(callee, paren, arguments),
             Expr::Get {object, name} => resolver.get_expr(object, name),
             Expr::Set {object, name, value} => resolver.set_expr(object, name, value),
-            Expr::This {keyword} => resolver.this_expr(keyword),
-            Expr::Super {keyword, method} => resolver.super_expr(keyword, method),
+            Expr::This { keyword} => resolver.this_expr(self, keyword),
+            Expr::Super { keyword, ..} => resolver.super_expr(self, keyword),
         }
     }
 }
 
-impl Resolvable for Stmt {
-    fn resolve(&self, resolver: &mut Resolver) {
+impl<'a> Resolvable<'a> for Stmt {
+    fn resolve(&'a self, resolver: &mut Resolver<'a>) {
         match self {
             Stmt::Expression { expression } => resolver.expression_stmt(expression),
             Stmt::Print { expression } => resolver.print_stmt(expression),
@@ -83,7 +83,7 @@ enum ClassType {
 
 pub struct Resolver<'a> {
     interpreter: &'a mut Interpreter,
-    scopes: Vec<FxHashMap<String, bool>>,
+    scopes: Vec<FxHashMap<&'a str, bool>>,
     current_function: FunctionType,
     current_class: ClassType,
 }
@@ -98,13 +98,13 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub fn resolve_array(&mut self, statements: &[Stmt]) {
+    pub fn resolve_array(&mut self, statements: &'a [Stmt]) {
         for statement in statements {
             self.resolve(statement);
         }
     }
 
-    pub fn resolve(&mut self, resolvable: &dyn Resolvable) {
+    pub fn resolve(&mut self, resolvable: &'a dyn Resolvable<'a>) {
         resolvable.resolve(self)
     }
 
@@ -116,34 +116,34 @@ impl<'a> Resolver<'a> {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: &Token) {
+    fn declare(&mut self, name: &'a Token) {
         let scope = self.scopes.last_mut();
         if let Some(scope) = scope {
-            if scope.contains_key(&name.lexeme) {
+            if scope.contains_key(name.lexeme.as_str()) {
                 lox::error(name, "Already a variable with this name in this scope.");
             }
-            scope.insert(name.lexeme.clone(), false);
+            scope.insert(name.lexeme.as_str(), false);
         }
     }
 
-    fn define(&mut self, name: &Token) {
+    fn define(&mut self, name: &'a Token) {
         let scope = self.scopes.last_mut();
         if let Some(scope) = scope {
-            scope.insert(name.lexeme.clone(), true);
+            scope.insert(name.lexeme.as_str(), true);
         }
     }
 
-    fn resolve_local(&mut self, expr: &Expr, name: &Token) {
+    fn resolve_local(&mut self, expr: &'a Expr, name: &Token) {
         for i in (0..self.scopes.len()).rev() {
             if let Some(scope) = self.scopes.get(i) {
-                if scope.contains_key(&name.lexeme.clone()) {
+                if scope.contains_key(name.lexeme.as_str()) {
                     self.interpreter.resolve(expr, self.scopes.len() - 1 - i)
                 }
             }
         }
     }
 
-    fn resolve_function(&mut self, _name: &Token, params: &[Token], body: &[Stmt], function_type: FunctionType) {
+    fn resolve_function(&mut self, _name: &Token, params: &'a [Token], body: &'a [Stmt], function_type: FunctionType) {
         let enclosing_function = self.current_function;
         self.current_function = function_type;
 
@@ -160,79 +160,72 @@ impl<'a> Resolver<'a> {
 }
 
 impl<'a> Resolver<'a> {
-    pub fn block_stmt(&mut self, statements: &[Stmt]) {
+    pub fn block_stmt(&mut self, statements: &'a [Stmt]) {
         self.begin_scope();
         self.resolve_array(statements);
         self.end_scope();
     }
 
-    pub fn var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) {
+    pub fn var_stmt(&mut self, name: &'a Token, initializer: &'a Option<Expr>) {
         self.declare(name);
         if let Some(initial_value) = initializer {
             self.resolve(initial_value)
         }
         self.define(name);
     }
-    pub fn variable_expr(&mut self, name: &Token) {
+    pub fn variable_expr(&mut self, expr: &'a Expr, name: &Token) {
         let scope = self.scopes.last_mut();
         if let Some(scope) = scope {
-            if let Some(bool) = scope.get(&name.lexeme.clone()) {
-                if !bool {
-                    lox::error(name, "Can't read local variable in its own initializer.")
+            if let Some(is_defined) = scope.get(name.lexeme.as_str()) {
+                if !is_defined {
+                    lox::error(name, "Can't read local variable in its own initializer.");
                 }
             }
         }
-
-        let expr = Expr::Variable {name: name.clone()};
-        self.resolve_local(&expr,  name)
+        self.resolve_local(expr, name);
     }
 
-    pub fn assign_expr(&mut self, name: &Token, value: &Expr) {
+    pub fn assign_expr(&mut self, expr: &'a Expr, name: &Token, value: &'a Expr) {
         self.resolve(value);
-
-        let expr = Expr::Assign {name: name.clone(), value: Box::new(value.clone())};
-        self.resolve_local(&expr,  name)
+        self.resolve_local(expr, name);
     }
 
-    pub fn get_expr(&mut self, object: &Expr, _name: &Token) {
+    pub fn get_expr(&mut self, object: &'a Expr, _name: &Token) {
         self.resolve(object);
     }
 
-    pub fn set_expr(&mut self, object:& Expr, _name: &Token, value: &Expr) {
+    pub fn set_expr(&mut self, object:&'a Expr, _name: &Token, value: &'a Expr) {
         self.resolve(value);
         self.resolve(object);
     }
 
-    pub fn this_expr(&mut self, keyword: &Token) {
+    pub fn this_expr(&mut self, expr: &'a Expr, keyword: &Token) {
         if self.current_class == ClassType::None {
-            lox::error(keyword,
-                      "Can't use 'this' outside of a class.");
+            lox::error(keyword, "Can't use 'this' outside of a class.");
         }
-
-        self.resolve_local(&Expr::This {keyword: keyword.clone()}, keyword)
+        self.resolve_local(expr, keyword);
     }
 
-    pub fn super_expr(&mut self, keyword: &Token, methods: &Token) {
+    pub fn super_expr(&mut self, expr: &'a Expr, keyword: &Token) {
         if self.current_class == ClassType::None {
             lox::error(keyword, "Can't use 'super' outside of a class.");
         } else if self.current_class != ClassType::Subclass {
             lox::error(keyword, "Can't use 'super' in a class with no superclass.");
         }
-
-        self.resolve_local(&Expr::Super {keyword: keyword.clone(), method: methods.clone()}, keyword)
+        self.resolve_local(expr, keyword);
     }
 
-    pub fn function_stmt(&mut self, name: &Token, params: &[Token], body: &[Stmt]) {
+    pub fn function_stmt(&mut self, name: &'a Token, params: &'a [Token], body: &'a [Stmt]) {
         self.declare(name);
         self.define(name);
         self.resolve_function(name, params, body, FunctionType::Function);
     }
 
-    fn expression_stmt(&mut self, expression: &Expr) {
+    fn expression_stmt(&mut self, expression: &'a Expr) {
         self.resolve(expression)
     }
 
-    fn if_stmt(&mut self, condition: &Expr, then_branch: &Stmt, else_branch: &Option<Box<Stmt>>) {
+    fn if_stmt(&mut self, condition: &'a Expr, then_branch: &'a Stmt, else_branch: &'a Option<Box<Stmt>>) {
         self.resolve(condition);
         self.resolve(then_branch);
         if let Some(else_branch) = else_branch {
@@ -240,11 +233,11 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn print_stmt(&mut self, expression: &Expr) {
+    fn print_stmt(&mut self, expression: &'a Expr) {
         self.resolve(expression)
     }
 
-    fn return_stmt(&mut self, keyword: &Token, value: &Option<Expr>) {
+    fn return_stmt(&mut self, keyword: &Token, value: &'a Option<Expr>) {
         if self.current_function == FunctionType::None {
             lox::error(keyword, "Can't return from top-level code.");
         }
@@ -256,12 +249,12 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn while_stmt(&mut self, condition: &Expr, body: &Stmt) {
+    fn while_stmt(&mut self, condition: &'a Expr, body: &'a Stmt) {
         self.resolve(condition);
         self.resolve(body);
     }
 
-    fn class_stmt(&mut self, class_name: &Token, superclass: &Option<Expr>, methods: &[Stmt]) {
+    fn class_stmt(&mut self, class_name: &'a Token, superclass: &'a Option<Expr>, methods: &'a [Stmt]) {
         let enclosing_class = self.current_class;
         self.current_class = ClassType::Class;
 
@@ -283,7 +276,7 @@ impl<'a> Resolver<'a> {
             let scope = self.scopes.last_mut();
             match scope {
                 Some(scope) => {
-                    scope.insert("super".to_string(), true);
+                    scope.insert("super", true);
                 }
                 None => return
             }
@@ -293,7 +286,7 @@ impl<'a> Resolver<'a> {
         let scope = self.scopes.last_mut();
         match scope {
             Some(scope) => {
-                scope.insert("this".to_string(), true);
+                scope.insert("this", true);
             }
             None => return
         }
@@ -321,12 +314,12 @@ impl<'a> Resolver<'a> {
         self.current_class = enclosing_class;
     }
 
-    fn binary_expr(&mut self, left: &Expr, _operator: &Token, right: &Expr) {
+    fn binary_expr(&mut self, left: &'a Expr, _operator: &Token, right: &'a Expr) {
         self.resolve(left);
         self.resolve(right);
     }
 
-    fn call_expr(&mut self, callee: &Expr, _paren: &Token, arguments: &Vec<Expr>) {
+    fn call_expr(&mut self, callee: &'a Expr, _paren: &Token, arguments: &'a[Expr]) {
         self.resolve(callee);
 
         for argument in arguments {
@@ -334,16 +327,16 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn grouping_expr(&mut self, expression: &Expr) {
+    fn grouping_expr(&mut self, expression: &'a Expr) {
         self.resolve( expression)
     }
 
-    fn logical_expr(&mut self, left: &Expr, _operator: &Token, right: &Expr) {
+    fn logical_expr(&mut self, left: &'a Expr, _operator: &Token, right: &'a Expr) {
         self.resolve(left);
         self.resolve(right);
     }
 
-    fn unary_expr(&mut self, _operator: &Token, right: &Expr) {
+    fn unary_expr(&mut self, _operator: &Token, right: &'a Expr) {
         self.resolve(right);
     }
 }
