@@ -114,19 +114,19 @@ impl Evaluable for Stmt {
 }
 
 #[derive(Debug)]
-pub struct Interpreter {
+pub struct Interpreter<'a> {
     globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
-    locals: FxHashMap<Expr, usize>,
+    locals: FxHashMap<&'a Expr, usize>,
 }
 
-impl Default for Interpreter {
+impl<'a> Default for Interpreter<'a> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Interpreter {
+impl<'a> Interpreter<'a> {
     pub fn new() -> Self {
         // Create a new global environment
         let globals = Environment::new();
@@ -158,17 +158,17 @@ impl Interpreter {
         unreachable!()
     }
 
-    pub fn interpret(&mut self, statements: Vec<Stmt>) {
+    pub fn interpret(&mut self, statements: &[Stmt]) {
         for statement in statements {
-            match self.evaluate(&statement) {
+            match self.evaluate(statement) {
                 Ok(_) => continue,
                 Err(e) => lox::runtime_error(e),
             }
         }
     }
 
-    pub fn resolve(&mut self, expr: &Expr, depth: usize) {
-        self.locals.insert(expr.clone(), depth);
+    pub fn set_locals(&mut self, locals: FxHashMap<&'a Expr, usize>) {
+        self.locals = locals;
     }
 
     fn evaluate(&mut self, evaluable: &dyn Evaluable) -> Result<LoxValue, RuntimeError> {

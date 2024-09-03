@@ -100,10 +100,7 @@ pub fn run(source: String) -> Result<(), LoxError> {
         }
     }
 
-    //
-    let mut interpreter = Interpreter::new();
-    let mut resolver = Resolver::new(&mut interpreter);
-    resolver.resolve_array(&statements);
+    let locals = Resolver::new().resolve_lox(&statements);
 
     unsafe {
         if HAD_ERROR {
@@ -114,7 +111,9 @@ pub fn run(source: String) -> Result<(), LoxError> {
         }
     }
 
-    interpreter.interpret(statements);
+    let mut interpreter = Interpreter::new();
+    interpreter.set_locals(locals);
+    interpreter.interpret(&statements);
 
     Ok(())
 }

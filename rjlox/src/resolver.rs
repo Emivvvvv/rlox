@@ -1,7 +1,6 @@
 use rustc_hash::FxHashMap;
 
 use crate::expr::Expr;
-use crate::interpreter::Interpreter;
 use crate::lexer::token::Token;
 use crate::lox;
 use crate::stmt::Stmt;
@@ -82,20 +81,26 @@ enum ClassType {
 }
 
 pub struct Resolver<'a> {
-    interpreter: &'a mut Interpreter,
     scopes: Vec<FxHashMap<&'a str, bool>>,
+    locals: FxHashMap<&'a Expr, usize>,
     current_function: FunctionType,
     current_class: ClassType,
 }
 
 impl<'a> Resolver<'a> {
-    pub fn new(interpreter: &'a mut Interpreter) -> Self {
+    pub fn new() -> Self {
         Resolver {
-            interpreter,
             scopes: Vec::new(),
+            locals: FxHashMap::default(),
             current_function: FunctionType::None,
             current_class: ClassType::None,
         }
+    }
+
+    pub fn resolve_lox(mut self, statements: &'a [Stmt]) -> FxHashMap<&'a Expr, usize> {
+        self.resolve_array(statements);
+
+        self.locals
     }
 
     pub fn resolve_array(&mut self, statements: &'a [Stmt]) {
@@ -137,7 +142,7 @@ impl<'a> Resolver<'a> {
         for i in (0..self.scopes.len()).rev() {
             if let Some(scope) = self.scopes.get(i) {
                 if scope.contains_key(name.lexeme.as_str()) {
-                    self.interpreter.resolve(expr, self.scopes.len() - 1 - i)
+                    self.locals.insert(expr, self.scopes.len() - 1 - i);
                 }
             }
         }
