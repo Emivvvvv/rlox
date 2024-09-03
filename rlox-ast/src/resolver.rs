@@ -87,6 +87,12 @@ pub struct Resolver<'a> {
     current_class: ClassType,
 }
 
+impl<'a> Default for Resolver<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> Resolver<'a> {
     pub fn new() -> Self {
         Resolver {

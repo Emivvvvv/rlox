@@ -334,10 +334,8 @@ impl<'a> Interpreter<'a> {
     fn evaluate_get(&mut self, object: &Expr, name: &Token) -> Result<LoxValue, RuntimeError> {
         let object = self.evaluate(object)?;
 
-        if let LoxValue::Callable(callable) = object {
-            if let LoxCallable::Instance(instance) = callable {
+        if let LoxValue::Callable(LoxCallable::Instance(instance)) = object {
                 return LoxInstance::get(instance, name);
-            }
         }
 
         Err(RuntimeError::InstanceError(
@@ -349,12 +347,10 @@ impl<'a> Interpreter<'a> {
     fn evaluate_set(&mut self, object: &Expr, name: &Token, value: &Expr) -> Result<LoxValue, RuntimeError> {
         let object = self.evaluate(object)?;
 
-        if let LoxValue::Callable(callable) = object {
-            if let LoxCallable::Instance(instance) = callable {
-                let value = self.evaluate(value)?;
-                instance.borrow_mut().set(name.clone(), value.clone());
-                return Ok(value);
-            }
+        if let LoxValue::Callable(LoxCallable::Instance(instance)) = object {
+            let value = self.evaluate(value)?;
+            instance.borrow_mut().set(name.clone(), value.clone());
+            return Ok(value);
         }
 
         Err(RuntimeError::InstanceError(
@@ -380,10 +376,8 @@ impl<'a> Interpreter<'a> {
                 match superclass.find_method(&method.lexeme) {
                     Some(method_callable) => {
                         if let LoxCallable::Function(method_func) = method_callable {
-                            if let LoxValue::Callable(callable) = object_lox_value {
-                                if let LoxCallable::Instance(instance) = callable {
-                                    return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method_func.bind(instance)))));
-                                }
+                            if let LoxValue::Callable(LoxCallable::Instance(instance)) = object_lox_value {
+                                return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method_func.bind(instance)))));
                             }
                         }
                         Err(RuntimeError::CustomError("Undefined behaviour".to_string()))

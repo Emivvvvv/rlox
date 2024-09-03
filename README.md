@@ -3,17 +3,9 @@
 Rust implementations of the jlox and clox interpreters from the book [Crafting Interpreters](https://craftinginterpreters.com/).
 
 > jlox is a tree-walk interpreter written in Java and clox is a bytecode interpreter written in C.
-> You can see my clox implementation [here](https://github.com/Emivvvvv/clox)
 
-# rjlox roadmap
+# rlox-ast roadmap
 Rust implementation of the jlox interpreter from the second chapter of "Crafting Interpreters".
-<br>
-
-> [!IMPORTANT]
-> This code is highly inefficient because I wanted to follow the original jlox implementation as much as possible.
-> This led to many cloning, mem allocations, and free operations. Possible more idiomatic implementation with some
-> small unsafe code might be implemented to enhance the ast interpreter rjlox performance later. Still, my main focus is on implementing [clox](https://github.com/Emivvvvv/clox) and rclox for now.
-
 <br>
 
 |        Chapter         | Status |
@@ -29,7 +21,7 @@ Rust implementation of the jlox interpreter from the second chapter of "Crafting
 |        Classes         |   ✅    |
 |      Inheritance       |   ✅    |
 
-# rclox roadmap
+# rlox-bytecode roadmap
 Rust implementation of the clox interpreter from the third chapter of "Crafting Interpreters".
 <br>
 
@@ -73,15 +65,15 @@ var after = clock();
 print after - before;
 ```
 
-rjlox: 
+rlox-ast: 
 ```shell
 cargo run --release -- test.rlox
-    Finished `release` profile [optimized] target(s) in 0.04s
-     Running `target/release/rjlox test.rlox`
+    Finished `release` profile [optimized] target(s) in 0.06s
+     Running `target/release/rlox-ast test.rlox`
 102334155
-168.32861804962158
+101.38370704650879
 ```
-rclox:
+rlox-bytecode:
 ```shell
 STILL ON DEVELOPMENT.
 ```

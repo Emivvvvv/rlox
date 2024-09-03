@@ -2,7 +2,7 @@ use std::env;
 use std::process::exit;
 use std::fs::File;
 use std::io::{self, BufRead, Read};
-use rclox::vm::{interpret, InterpretError};
+use rlox_bytecode::vm::{interpret, InterpretError};
 
 fn main() {
     let args: Vec<String> = env::args().collect();

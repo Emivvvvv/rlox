@@ -32,10 +32,8 @@ impl LoxInstance {
             return Ok(lox_value.clone());
         }
 
-        if let Some(callable) = instance.borrow().klass.find_method(&name.lexeme) {
-            if let LoxCallable::Function(method) = callable {
-                return Ok(LoxValue::Callable(LoxCallable::Function(Rc::clone(method))));
-            }
+        if let Some(LoxCallable::Function(method)) = instance.borrow().klass.find_method(&name.lexeme) {
+            return Ok(LoxValue::Callable(LoxCallable::Function(Rc::clone(method))));
         }
 
         Err(RuntimeError::InstanceError(

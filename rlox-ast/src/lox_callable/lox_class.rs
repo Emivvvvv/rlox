@@ -33,10 +33,8 @@ impl LoxClass {
 impl Callable for LoxClass {
     fn arity(&self) -> usize {
         let initializer_option = self.find_method(&"init".to_string());
-        if let Some(callable) = initializer_option {
-            if let LoxCallable::Function(initializer_function) = callable {
-                return initializer_function.arity();
-            }
+        if let Some(LoxCallable::Function(initializer_function)) = initializer_option {
+            initializer_function.arity();
         }
 
         0
@@ -50,10 +48,8 @@ impl Callable for LoxClass {
         let instance = Rc::new(RefCell::new(LoxInstance::new(self)));
 
         let initializer_option = self.find_method(&"init".to_string());
-        if let Some(callable) = initializer_option {
-            if let LoxCallable::Function(initializer_function) = callable {
-                initializer_function.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
-            }
+        if let Some(LoxCallable::Function(initializer_function)) = initializer_option {
+            initializer_function.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
         }
 
         Ok(LoxValue::Callable(LoxCallable::Instance(instance)))
