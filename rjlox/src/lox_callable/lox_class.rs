@@ -1,8 +1,9 @@
-use std::any::Any;
+use std::cell::RefCell;
 use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use crate::interpreter::{Interpreter, RuntimeError};
+use crate::lox_callable::callable::Callable;
 use crate::lox_callable::lox_instance::LoxInstance;
 use crate::lox_value::{LoxCallable, LoxValue};
 
@@ -10,15 +11,15 @@ use crate::lox_value::{LoxCallable, LoxValue};
 pub struct LoxClass {
     display_name: String,
     name: String,
-    superclass: Option<Box<LoxClass>>,
-    methods: FxHashMap<String, LoxValue>,
+    superclass: Option<Rc<LoxClass>>,
+    methods: FxHashMap<String, LoxCallable>,
 }
 
 impl LoxClass {
     pub fn new(
         name: String,
-        superclass: Option<Box<LoxClass>>,
-        methods: FxHashMap<String, LoxValue>,
+        superclass: Option<Rc<LoxClass>>,
+        methods: FxHashMap<String, LoxCallable>,
     ) -> Self {
         Self {
             display_name: format!("class {}", name),
@@ -29,14 +30,12 @@ impl LoxClass {
     }
 }
 
-impl LoxClass {
+impl Callable for LoxClass {
     fn arity(&self) -> usize {
         let initializer_option = self.find_method(&"init".to_string());
-        if let Some(initializer_value) = initializer_option {
-            if let LoxValue::Callable(callable) = initializer_value {
-                if let LoxCallable::Function(init_func) = callable {
-                    return init_func.arity();
-                }
+        if let Some(callable) = initializer_option {
+            if let LoxCallable::Function(initializer_function) = callable {
+                return initializer_function.arity();
             }
         }
 
@@ -48,30 +47,20 @@ impl LoxClass {
         interpreter: &mut Interpreter,
         arguments: Vec<LoxValue>,
     ) -> Result<LoxValue, RuntimeError> {
-        let instance = Rc::new(LoxInstance::new(self));
+        let instance = Rc::new(RefCell::new(LoxInstance::new(self)));
 
         let initializer_option = self.find_method(&"init".to_string());
-        if let Some(initializer_value) = initializer_option {
-            if let LoxValue::Callable(callable) = initializer_value {
-                if let LoxCallable::Function(init_func) = callable {
-                    init_func.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
-                }
+        if let Some(callable) = initializer_option {
+            if let LoxCallable::Function(initializer_function) = callable {
+                initializer_function.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
             }
         }
 
         Ok(LoxValue::Callable(LoxCallable::Instance(instance)))
     }
 
-    pub(crate) fn get_name(&self) -> &str {
-        &self.display_name
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
+    fn get_name(&self) -> String {
+        self.display_name.clone()
     }
 }
 
@@ -80,7 +69,7 @@ impl LoxClass {
         &self.name
     }
 
-    pub fn find_method(&self, name: &String) -> Option<&LoxValue> {
+    pub fn find_method(&self, name: &String) -> Option<&LoxCallable> {
         self.methods.get(name).or_else(|| {
             self.superclass.as_ref().and_then(|superclass| superclass.find_method(name))
         })

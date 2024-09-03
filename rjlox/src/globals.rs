@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -20,9 +19,10 @@ pub fn define_globals(global_environment: &Rc<RefCell<Environment>>) {
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct ClockFunction;
 
-impl ClockFunction {
+impl Callable for ClockFunction {
     fn arity(&self) -> usize {
         0
     }
@@ -39,25 +39,19 @@ impl ClockFunction {
         Ok(LoxValue::Number(since_the_epoch.as_secs_f64()))
     }
 
-    pub(crate) fn get_name(&self) -> &str {
-        "<native fn clock>"
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
+    fn get_name(&self) -> String {
+        "<native fn clock>".to_string()
     }
 }
 
 use std::io;
 use std::io::Write;
+use crate::lox_callable::callable::Callable;
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct InputFunction;
 
-impl InputFunction {
+impl Callable for InputFunction {
     fn arity(&self) -> usize {
         1
     }
@@ -83,15 +77,5 @@ impl InputFunction {
         Ok(LoxValue::String(input.trim().to_string())) // Trim the input and return as LoxValue::String
     }
 
-    pub fn get_name(&self) -> &str {
-        "<native fn input>"
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn get_name(&self) -> String {"<native fn input>".to_string()}
 }

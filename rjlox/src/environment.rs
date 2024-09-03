@@ -22,7 +22,7 @@ impl EnvironmentError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Environment {
     values: FxHashMap<String, LoxValue>,
     pub(crate) enclosing: Option<Rc<RefCell<Environment>>>,
