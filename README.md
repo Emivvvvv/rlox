@@ -53,6 +53,8 @@ Rust implementation of the clox interpreter from the third chapter of "Crafting 
 
 # benchmark
 
+The benchmark was conducted on a Macbook M1 Pro, while plugged in and with the fans running at maximum capacity.
+
 ```lox
 fun fib(n) {
   if (n < 2) return n;
