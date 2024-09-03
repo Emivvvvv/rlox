@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use rustc_hash::FxHashMap;
-use std::rc::Rc;
 
 use crate::expr::Expr;
 use crate::interpreter::Interpreter;
@@ -83,15 +81,15 @@ enum ClassType {
     None,
 }
 
-pub struct Resolver {
-    interpreter: Rc<RefCell<Interpreter>>,
+pub struct Resolver<'a> {
+    interpreter: &'a mut Interpreter,
     scopes: Vec<FxHashMap<String, bool>>,
     current_function: FunctionType,
     current_class: ClassType,
 }
 
-impl Resolver {
-    pub fn new(interpreter: Rc<RefCell<Interpreter>>) -> Self {
+impl<'a> Resolver<'a> {
+    pub fn new(interpreter: &'a mut Interpreter) -> Self {
         Resolver {
             interpreter,
             scopes: Vec::new(),
@@ -135,11 +133,11 @@ impl Resolver {
         }
     }
 
-    fn resolve_local(&self, expr: &Expr, name: &Token) {
+    fn resolve_local(&mut self, expr: &Expr, name: &Token) {
         for i in (0..self.scopes.len()).rev() {
             if let Some(scope) = self.scopes.get(i) {
                 if scope.contains_key(&name.lexeme.clone()) {
-                    self.interpreter.borrow_mut().resolve(expr, self.scopes.len() - 1 - i)
+                    self.interpreter.resolve(expr, self.scopes.len() - 1 - i)
                 }
             }
         }
@@ -161,7 +159,7 @@ impl Resolver {
     }
 }
 
-impl Resolver {
+impl<'a> Resolver<'a> {
     pub fn block_stmt(&mut self, statements: &[Stmt]) {
         self.begin_scope();
         self.resolve_array(statements);

@@ -1,11 +1,9 @@
-use std::cell::RefCell;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::io;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::Path;
-use std::rc::Rc;
 
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lexer::lexer;
@@ -102,15 +100,10 @@ pub fn run(source: String) -> Result<(), LoxError> {
         }
     }
 
-
+    //
     let mut interpreter = Interpreter::new();
-
-    let rc_refcell_interpreter = Rc::new(RefCell::new(interpreter));
-
-    {
-        let mut resolver = Resolver::new(Rc::clone(&rc_refcell_interpreter));
-        resolver.resolve_array(&statements);
-    }
+    let mut resolver = Resolver::new(&mut interpreter);
+    resolver.resolve_array(&statements);
 
     unsafe {
         if HAD_ERROR {
@@ -120,10 +113,6 @@ pub fn run(source: String) -> Result<(), LoxError> {
             return Err(LoxError::RuntimeError("Runtime error".to_string()));
         }
     }
-
-    interpreter = Rc::try_unwrap(rc_refcell_interpreter)
-        .expect("More than one strong reference exists!")
-        .into_inner();
 
     interpreter.interpret(statements);
 
