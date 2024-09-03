@@ -2,8 +2,13 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
+use crate::globals::{ClockFunction, InputFunction};
+use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lexer::token::{Literal, TokenType};
-use crate::lox_callable::lox_callable::LoxCallable;
+use crate::lox_callable::lox_class::LoxClass;
+use crate::lox_callable::lox_function::LoxFunction;
+use crate::lox_callable::lox_instance::LoxInstance;
+use crate::lox_callable::callable::Callable;
 
 #[derive(Debug)]
 pub enum LoxValueError {
@@ -20,47 +25,28 @@ impl LoxValueError {
         }
     }
 }
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum NativeFunctions {
+    ClockFunction(Rc<ClockFunction>),
+    InputFunction(Rc<InputFunction>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum LoxCallable {
+    Function(Rc<LoxFunction>),
+    Class(Rc<LoxClass>),
+    Instance(Rc<RefCell<LoxInstance>>),
+    NativeFunction(NativeFunctions),
+}
+
 #[derive(Clone)]
 pub enum LoxValue {
     Nil,
     Boolean(bool),
     Number(f64),
     String(String),
-    Callable(Rc<RefCell<dyn LoxCallable>>),
-}
-
-impl LoxValue {
-    pub fn extract_boolean(&self) -> Option<bool> {
-        if let LoxValue::Boolean(value) = self {
-            Some(*value)
-        } else {
-            None
-        }
-    }
-
-    pub fn extract_number(&self) -> Option<f64> {
-        if let LoxValue::Number(value) = self {
-            Some(*value)
-        } else {
-            None
-        }
-    }
-
-    pub fn extract_string(&self) -> Option<&String> {
-        if let LoxValue::String(value) = self {
-            Some(value)
-        } else {
-            None
-        }
-    }
-
-    pub fn extract_callable(&self) -> Option<&Rc<RefCell<dyn LoxCallable>>> {
-        if let LoxValue::Callable(callable) = self {
-            Some(callable)
-        } else {
-            None
-        }
-    }
+    Callable(LoxCallable),
 }
 
 impl LoxValue {
@@ -93,7 +79,7 @@ impl LoxValue {
         LoxValue::Boolean(true)
     }
 
-    pub(crate) fn math_if_num(self, other: Self, operator: TokenType) -> Result<Self, LoxValueError> {
+    pub(crate) fn math_if_num(self, other: Self, operator: &TokenType) -> Result<Self, LoxValueError> {
         match (self, other) {
             (LoxValue::Number(left_num), LoxValue::Number(right_num)) => {
                 let result = match operator {
@@ -172,6 +158,49 @@ impl From<&Literal> for LoxValue {
     }
 }
 
+impl Callable for LoxCallable {
+    fn arity(&self) -> usize {
+        match self {
+            LoxCallable::Function(function) => function.as_ref().arity(),
+            LoxCallable::Class(class) => class.as_ref().arity(),
+            LoxCallable::Instance(instance) => instance.borrow().arity(),
+            LoxCallable::NativeFunction(native_function) => match native_function {
+                NativeFunctions::ClockFunction(clock) => clock.as_ref().arity(),
+                NativeFunctions::InputFunction(input) => input.as_ref().arity(),
+            },
+        }
+    }
+
+    fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        arguments: Vec<LoxValue>,
+    ) -> Result<LoxValue, RuntimeError> {
+        match self {
+            LoxCallable::Function(function) => function.as_ref().call(interpreter, arguments),
+            LoxCallable::Class(class) => class.as_ref().call(interpreter, arguments),
+            LoxCallable::Instance(instance) => instance.borrow().call(interpreter, arguments),
+            LoxCallable::NativeFunction(native_function) => match native_function {
+                NativeFunctions::ClockFunction(clock) => clock.as_ref().call(interpreter, arguments),
+                NativeFunctions::InputFunction(input) => input.as_ref().call(interpreter, arguments),
+            },
+        }
+    }
+
+    fn get_name(&self) -> String {
+        match self {
+            LoxCallable::Function(function) => function.get_name(),
+            LoxCallable::Class(class) => class.get_name(),
+            LoxCallable::Instance(instance) => instance.borrow().get_name(),
+            LoxCallable::NativeFunction(native_function) => match native_function {
+                NativeFunctions::ClockFunction(clock) => clock.get_name(),
+                NativeFunctions::InputFunction(input) => input.get_name(),
+            },
+        }
+    }
+}
+
+
 impl fmt::Display for LoxValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let text = match self {
@@ -188,11 +217,42 @@ impl fmt::Display for LoxValue {
             }
             LoxValue::Boolean(bool) => bool.to_string(),
             LoxValue::Nil => "nil".to_string(),
-            LoxValue::Callable(callable) => callable.borrow().to_string(),
+            LoxValue::Callable(callable) => {
+                let name = match callable {
+                    LoxCallable::Function(function) => {
+                        let func = Rc::clone(function);
+                        func.get_name().to_string()
+                    }
+                    LoxCallable::Class(class) => {
+                        let class_ref = Rc::clone(class);
+                        class_ref.get_name().to_string()
+                    }
+                    LoxCallable::Instance(instance) => {
+                        let instance_ref = Rc::clone(instance);
+                        let x = instance_ref.borrow().get_name().to_string();
+                        x
+                    }
+                    LoxCallable::NativeFunction(native_function) => {
+                        match native_function {
+                            NativeFunctions::ClockFunction(clock) => {
+                                let clock_ref = Rc::clone(clock);
+                                clock_ref.get_name().to_string()
+                            }
+                            NativeFunctions::InputFunction(input) => {
+                                let input_ref = Rc::clone(input);
+                                input_ref.get_name().to_string()
+                            }
+                        }
+                    }
+                };
+                name // Now `name` is a `String`, so it owns the data
+            },
         };
-        write!(f, "{text}",)
+        write!(f, "{}", text)
     }
 }
+
+
 
 impl fmt::Debug for LoxValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -201,10 +261,41 @@ impl fmt::Debug for LoxValue {
             LoxValue::Boolean(b) => write!(f, "Boolean({:?})", b),
             LoxValue::Number(n) => write!(f, "Number({:?})", n),
             LoxValue::String(s) => write!(f, "String({:?})", s),
-            LoxValue::Callable(c) => write!(f, "Callable(<{}>)", c.borrow()),
+            LoxValue::Callable(c) => {
+                let name = match c {
+                    LoxCallable::Function(function) => {
+                        let func = Rc::clone(function);
+                        func.get_name().to_string()
+                    }
+                    LoxCallable::Class(class) => {
+                        let class_ref = Rc::clone(class);
+                        class_ref.get_name().to_string()
+                    }
+                    LoxCallable::Instance(instance) => {
+                        let instance_ref = Rc::clone(instance);
+                        let x = instance_ref.borrow().get_name().to_string();
+                        x
+                    }
+                    LoxCallable::NativeFunction(native_function) => {
+                        match native_function {
+                            NativeFunctions::ClockFunction(clock) => {
+                                let clock_ref = Rc::clone(clock);
+                                clock_ref.get_name().to_string()
+                            }
+                            NativeFunctions::InputFunction(input) => {
+                                let input_ref = Rc::clone(input);
+                                input_ref.get_name().to_string()
+                            }
+                        }
+                    }
+                };
+
+                write!(f, "Callable(<{}>)", name)
+            },
         }
     }
 }
+
 
 impl PartialEq for LoxValue {
     fn eq(&self, other: &Self) -> bool {

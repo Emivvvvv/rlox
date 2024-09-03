@@ -1,5 +1,5 @@
 [package]
-name = "rjlox"
+name = "rlox-ast"
 version = "0.1.0"
 authors = ["Emirhan TALA <tala.emirhan@gmail.com>"]
 edition = "2021"
