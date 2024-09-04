@@ -39,12 +39,7 @@ impl From<io::Error> for LoxError {
 static mut HAD_ERROR: bool = false;
 static mut HAD_RUNTIME_ERROR: bool = false;
 
-pub fn run_file(file_path: &String) -> Result<(), LoxError> {
-    let path = Path::new(file_path);
-    let file_string = fs::read_to_string(path)?;
-
-    run(file_string)?;
-
+fn check_errors() -> Result<(), LoxError> {
     unsafe {
         if HAD_ERROR {
             return Err(LoxError::Error("Compilation error".to_string()));
@@ -53,6 +48,16 @@ pub fn run_file(file_path: &String) -> Result<(), LoxError> {
             return Err(LoxError::RuntimeError("Runtime error".to_string()));
         }
     }
+    Ok(())
+}
+
+pub fn run_file(file_path: &String) -> Result<(), LoxError> {
+    let path = Path::new(file_path);
+    let file_string = fs::read_to_string(path)?;
+
+    run(file_string)?;
+
+    check_errors()?;
 
     Ok(())
 }
@@ -91,25 +96,11 @@ pub fn run(source: String) -> Result<(), LoxError> {
         .parse()
         .map_err(|_| LoxError::Error("Error during parsing".to_string()))?;
 
-    unsafe {
-        if HAD_ERROR {
-            return Err(LoxError::Error("Error during lexing".to_string()));
-        }
-        if HAD_RUNTIME_ERROR {
-            return Err(LoxError::RuntimeError("Runtime error".to_string()));
-        }
-    }
+    check_errors()?;
 
     let locals = Resolver::new().resolve_lox(&statements);
 
-    unsafe {
-        if HAD_ERROR {
-            return Err(LoxError::Error("Error during lexing".to_string()));
-        }
-        if HAD_RUNTIME_ERROR {
-            return Err(LoxError::RuntimeError("Runtime error".to_string()));
-        }
-    }
+    check_errors()?;
 
     let mut interpreter = Interpreter::new();
     interpreter.set_locals(locals);

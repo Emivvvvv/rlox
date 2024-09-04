@@ -40,7 +40,7 @@ pub enum LoxCallable {
     NativeFunction(NativeFunctions),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum LoxValue {
     Nil,
     Boolean(bool),
@@ -251,51 +251,6 @@ impl fmt::Display for LoxValue {
         write!(f, "{}", text)
     }
 }
-
-
-
-impl fmt::Debug for LoxValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LoxValue::Nil => write!(f, "Nil"),
-            LoxValue::Boolean(b) => write!(f, "Boolean({:?})", b),
-            LoxValue::Number(n) => write!(f, "Number({:?})", n),
-            LoxValue::String(s) => write!(f, "String({:?})", s),
-            LoxValue::Callable(c) => {
-                let name = match c {
-                    LoxCallable::Function(function) => {
-                        let func = Rc::clone(function);
-                        func.get_name().to_string()
-                    }
-                    LoxCallable::Class(class) => {
-                        let class_ref = Rc::clone(class);
-                        class_ref.get_name().to_string()
-                    }
-                    LoxCallable::Instance(instance) => {
-                        let instance_ref = Rc::clone(instance);
-                        let x = instance_ref.borrow().get_name().to_string();
-                        x
-                    }
-                    LoxCallable::NativeFunction(native_function) => {
-                        match native_function {
-                            NativeFunctions::ClockFunction(clock) => {
-                                let clock_ref = Rc::clone(clock);
-                                clock_ref.get_name().to_string()
-                            }
-                            NativeFunctions::InputFunction(input) => {
-                                let input_ref = Rc::clone(input);
-                                input_ref.get_name().to_string()
-                            }
-                        }
-                    }
-                };
-
-                write!(f, "Callable(<{}>)", name)
-            },
-        }
-    }
-}
-
 
 impl PartialEq for LoxValue {
     fn eq(&self, other: &Self) -> bool {
