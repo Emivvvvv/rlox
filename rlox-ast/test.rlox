@@ -1,25 +1,9 @@
 fun fib(n) {
-    if (n < 2) return n;
-    return fib(n - 1) + fib(n - 2);
+  if (n < 2) return n;
+  return fib(n - 1) + fib(n - 2);
 }
 
-class Calculator {
-    fib(n) {
-        if (n < 2) return n;
-        return this.fib(n - 1) + this.fib(n - 2);
-    }
-}
-
-// testing fun fib
 var before = clock();
-print "fun fib:" + fib(35);
+print fib(40);
 var after = clock();
 print after - before;
-
-
-// testing fun Calculator.fib
-var before2 = clock();
-var calc = Calculator();
-print "Calculator.fib:" + calc.fib(35);
-var after2 = clock();
-print after2 - before2;
