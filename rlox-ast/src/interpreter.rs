@@ -263,12 +263,12 @@ impl<'a> Interpreter<'a> {
         match self.locals.get(expr) {
             Some(distance) => {
                 // Call assign_at with the environment wrapped in Rc<RefCell<Environment>>
-                Environment::assign_at(Rc::clone(&self.environment), *distance, name, value.clone())
+                Environment::assign_at(Rc::clone(&self.environment), *distance, name, value)
                     .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))
             },
             None => {
                 // Call assign with the globals environment wrapped in Rc<RefCell<Environment>>
-                self.globals.borrow_mut().assign(name, value.clone())
+                self.globals.borrow_mut().assign(name, value)
                     .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))
             },
         }

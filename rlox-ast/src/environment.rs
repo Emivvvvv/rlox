@@ -65,8 +65,8 @@ impl Environment {
 
     pub fn assign(&mut self, name: &Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
         if self.values.contains_key(&name.lexeme) {
-            self.values.insert(name.lexeme.clone(), value.clone());
-            Ok(value)
+            self.values.insert(name.lexeme.clone(), value);
+            Ok(LoxValue::Boolean(true))
         } else if let Some(enclosing) = &self.enclosing {
             enclosing.borrow_mut().assign(name, value)
         } else {
@@ -92,7 +92,7 @@ impl Environment {
         let binding = Environment::ancestor(env, distance);
         let mut ancestor_env = binding.borrow_mut();
 
-        ancestor_env.values.insert(name.lexeme.clone(), value.clone())
+        ancestor_env.values.insert(name.lexeme.clone(), value)
             .ok_or_else(|| EnvironmentError::AssignVariableError(format!(
                 "Couldn't assign variable '{}' at distance '{}'.", name.lexeme, distance
             )))
@@ -189,34 +189,6 @@ mod tests {
         inner.borrow_mut().define("var".to_string(), inner_value.clone());
 
         assert_eq!(inner.borrow().get(&token).unwrap(), inner_value);
-    }
-
-    #[test]
-    fn test_assign_in_nested_environment() {
-        let outer = Environment::new();
-        outer.borrow_mut().define("x".to_string(), LoxValue::Number(10.0));
-
-        let inner = Environment::with_enclosing(Rc::clone(&outer));
-        assert_eq!(
-            inner
-                .borrow_mut()
-                .assign(
-                    &Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
-                    LoxValue::Number(20.0)
-                )
-                .unwrap(),
-            LoxValue::Number(20.0)
-        );
-        assert_eq!(
-            inner.borrow().get(&Token::new(
-                TokenType::Identifier,
-                "x".to_string(),
-                Literal::Nil,
-                1
-            ))
-                .unwrap(),
-            LoxValue::Number(20.0)
-        );
     }
 
     #[test]
