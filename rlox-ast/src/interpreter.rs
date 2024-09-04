@@ -377,7 +377,7 @@ impl<'a> Interpreter<'a> {
                     Some(method_callable) => {
                         if let LoxCallable::Function(method_func) = method_callable {
                             if let LoxValue::Callable(LoxCallable::Instance(instance)) = object_lox_value {
-                                return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method_func.bind(instance)))));
+                                return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method_func.bind(&instance)))));
                             }
                         }
                         Err(RuntimeError::CustomError("Undefined behaviour".to_string()))

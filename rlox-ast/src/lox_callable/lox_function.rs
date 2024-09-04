@@ -86,9 +86,9 @@ impl LoxFunction {
         &self.name.lexeme
     }
 
-    pub fn bind(&self, rc_instance: Rc<RefCell<LoxInstance>>) -> LoxFunction {
+    pub fn bind(&self, rc_instance: &Rc<RefCell<LoxInstance>>) -> LoxFunction {
         let environment = Environment::with_enclosing(Rc::clone(&self.closure));
-        environment.borrow_mut().define("this".to_string(), LoxValue::Callable(LoxCallable::Instance(rc_instance)));
+        environment.borrow_mut().define("this".to_string(), LoxValue::Callable(LoxCallable::Instance(Rc::clone(rc_instance))));
 
         LoxFunction {
             display_name: self.display_name.clone(),

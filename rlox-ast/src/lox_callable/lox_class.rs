@@ -49,7 +49,7 @@ impl Callable for LoxClass {
 
         let initializer_option = self.find_method(&"init".to_string());
         if let Some(LoxCallable::Function(initializer_function)) = initializer_option {
-            initializer_function.bind(Rc::clone(&instance)).call(interpreter, arguments)?;
+            initializer_function.bind(&instance).call(interpreter, arguments)?;
         }
 
         Ok(LoxValue::Callable(LoxCallable::Instance(instance)))
