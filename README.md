@@ -25,9 +25,8 @@ Rust implementation of the jlox interpreter from the second chapter of "Crafting
 Rust implementation of the clox interpreter from the third chapter of "Crafting Interpreters".
 <br>
 
-> [!IMPORTANT]
-> The foundation of rclox was inspired by this [implementation](https://github.com/jeschkies/lox-rs/blob/master/bytecode/).
-> This implementation is more idiomatic that rjlox, and has some unsafe code to enhance performance.
+> [!NOTE]
+> The foundation of rclox was inspired by [jeschkies's lox-rs implementation](https://github.com/jeschkies/lox-rs/blob/master/bytecode/).
 
 <br>
 
