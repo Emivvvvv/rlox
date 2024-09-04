@@ -49,32 +49,3 @@ Rust implementation of the clox interpreter from the third chapter of "Crafting 
 | Methods and Initializers |   ⏳    |
 |       Superclasses       |   ⏳    |
 |       Optimization       |   ⏳    |
-
-# benchmark
-
-The benchmark was conducted on a Macbook M1 Pro, while plugged in and with the fans running at maximum capacity.
-
-```lox
-fun fib(n) {
-  if (n < 2) return n;
-  return fib(n - 1) + fib(n - 2);
-}
-
-var before = clock();
-print fib(40);
-var after = clock();
-print after - before;
-```
-
-rlox-ast: 
-```shell
-cargo run --release -- test.rlox
-    Finished `release` profile [optimized] target(s) in 0.06s
-     Running `target/release/rlox-ast test.rlox`
-102334155
-101.38370704650879
-```
-rlox-bytecode:
-```shell
-STILL ON DEVELOPMENT.
-```
