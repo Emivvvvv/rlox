@@ -102,8 +102,7 @@ pub fn run(source: String) -> Result<(), LoxError> {
 
     check_errors()?;
 
-    let mut interpreter = Interpreter::new();
-    interpreter.set_locals(locals);
+    let mut interpreter = Interpreter::new_with_locals(locals);
     interpreter.interpret(&statements);
 
     Ok(())

@@ -142,6 +142,21 @@ impl<'a> Interpreter<'a> {
         }
     }
 
+    pub fn new_with_locals(locals: FxHashMap<&'a Expr, usize>) -> Self {
+        // Create a new global environment
+        let globals = Environment::new();
+        define_globals(&globals);
+
+        // Initially, the environment is the global environment
+        let environment = Rc::clone(&globals);
+
+        Self {
+            globals,
+            environment,
+            locals,
+        }
+    }
+
     pub fn get_globals(&self) -> Rc<RefCell<Environment>> {
         Rc::clone(&self.globals)
     }
