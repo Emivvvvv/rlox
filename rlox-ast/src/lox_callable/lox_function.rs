@@ -15,7 +15,7 @@ pub struct LoxFunction {
     name: Token,
     params: Vec<Token>,
     body: Vec<Stmt>,
-    closure: Rc<RefCell<Environment>>,
+    closure: Rc<Environment>,
     is_initializer: bool
 }
 
@@ -24,7 +24,7 @@ impl LoxFunction {
         name: Token,
         params: Vec<Token>,
         body: Vec<Stmt>,
-        closure: Rc<RefCell<Environment>>,
+        closure: Rc<Environment>,
         is_initializer: bool
     ) -> Self {
         Self {
@@ -53,7 +53,7 @@ impl Callable for LoxFunction {
 
         // Bind parameters
         for (param, argument) in self.params.iter().zip(arguments.iter()) {
-            environment.borrow_mut().define(param.lexeme.clone(), argument.clone());
+            environment.define(param.lexeme.clone(), argument.clone());
         }
 
         // Execute the function body
@@ -88,7 +88,7 @@ impl LoxFunction {
 
     pub fn bind(&self, rc_instance: &Rc<RefCell<LoxInstance>>) -> LoxFunction {
         let environment = Environment::with_enclosing(Rc::clone(&self.closure));
-        environment.borrow_mut().define("this".to_string(), LoxValue::Callable(LoxCallable::Instance(Rc::clone(rc_instance))));
+        environment.define("this".to_string(), LoxValue::Callable(LoxCallable::Instance(Rc::clone(rc_instance))));
 
         LoxFunction {
             display_name: self.display_name.clone(),

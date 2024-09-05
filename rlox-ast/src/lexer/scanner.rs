@@ -1,17 +1,19 @@
+use crate::interner::Interner;
 use crate::lexer::token::{Hf64, Token, TokenType, Literal};
 use crate::lox::report;
 
 
-pub struct Lexer {
+pub struct Scanner<'a> {
     source: String,
     pub tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
+    interner: &'a Interner,
 }
 
-impl Lexer {
-    pub fn new(source: String) -> Self {
+impl<'a> Scanner<'a> {
+    pub fn new(source: String, interner: &Interner) -> Self {
         let tokens: Vec<Token> = Vec::new();
         Self {
             source,
@@ -19,6 +21,7 @@ impl Lexer {
             start: 0,
             current: 0,
             line: 1,
+            interner,
         }
     }
 
@@ -30,7 +33,7 @@ impl Lexer {
 
         let _ = &self.tokens.push(Token::new(
             TokenType::Eof,
-            "".to_string(),
+            self.interner.get_or_intern("<EOF>"),
             Literal::Nil,
             self.line,
         ));
@@ -121,7 +124,7 @@ impl Lexer {
     }
 
     fn add_token(&mut self, token_type: TokenType, literal: Literal) {
-        let text = self.source[self.start..self.current].to_string();
+        let text = self.interner.get_or_intern(&self.source[self.start..self.current]);
         self.tokens
             .push(Token::new(token_type, text, literal, self.line))
     }
@@ -187,7 +190,7 @@ impl Lexer {
 
         self.advance();
 
-        let string_value = self.source[self.start + 1..self.current - 1].to_string();
+        let string_value = self.interner.get_or_intern(&self.source[self.start + 1..self.current - 1]);
         self.add_token(TokenType::String, Literal::Str(string_value));
     }
 
@@ -262,7 +265,8 @@ mod tests {
     #[test]
     fn test_basic_tokens() {
         let source = "( ) { } , . - + ; * ! = < > /";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         let expected_types = [TokenType::LeftParen,
             TokenType::RightParen,
@@ -290,80 +294,91 @@ mod tests {
     #[test]
     fn test_string_literal() {
         let source = "\"hello world\"";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         assert_eq!(lexer.tokens.len(), 2); // String token + EOF
         assert_eq!(lexer.tokens[0].token_type, TokenType::String);
-        assert_eq!(lexer.tokens[0].lexeme, "\"hello world\"");
+        assert_eq!(lexer.tokens[0].lexeme, interner.get_or_intern("\"hello world\""));
     }
 
     #[test]
     fn test_numbers() {
         let source = "123 456.789";
-        let mut lexer = Lexer::new(source.to_string());
-        lexer.scan_tokens();
-        println!("{:?}", lexer.tokens);
+        let mut interner = Interner::new();
+        let tokens = {
+            let mut lexer = Scanner::new(source.to_string(), &mut interner);
+            lexer.scan_tokens();
+            lexer.tokens
+        };
+
+        println!("{:?}", tokens);
         assert_eq!(
-            lexer.tokens.len(),
+            tokens.len(),
             3,
             "Expected 3 tokens, found {}",
-            lexer.tokens.len()
+            tokens.len()
         ); // Improved assertion message
-        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[0].lexeme, "123");
-        assert_eq!(lexer.tokens[1].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[1].lexeme, "456.789");
+        assert_eq!(tokens[0].token_type, TokenType::Number);
+        assert_eq!(tokens[0].lexeme, interner.get_or_intern("123"));
+        assert_eq!(tokens[1].token_type, TokenType::Number);
+        assert_eq!(tokens[1].lexeme, interner.get_or_intern("456.789"));
     }
 
     #[test]
     fn test_comments() {
         let source = "// This is a comment\n123";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         // Only the number and EOF should be tokenized, not the comment
         assert_eq!(lexer.tokens.len(), 2);
         assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[0].lexeme, "123");
+        assert_eq!(lexer.tokens[0].lexeme, interner.get_or_intern("123"));
     }
 
     #[test]
     fn test_block_comments() {
         let source = "/* This is a block comment */ 456";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         // Only the number and EOF should be tokenized, not the block comment
         assert_eq!(lexer.tokens.len(), 2);
         assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[0].lexeme, "456");
+        assert_eq!(lexer.tokens[0].lexeme, interner.get_or_intern("456"));
     }
 
     #[test]
     fn test_nested_block_comments() {
         let source = "/* This is a /* nested */ block comment */ 789";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         // Only the number and EOF should be tokenized, not the nested block comment
         assert_eq!(lexer.tokens.len(), 2);
         assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[0].lexeme, "789");
+        assert_eq!(lexer.tokens[0].lexeme, interner.get_or_intern("789"));
     }
 
     #[test]
     fn test_unterminated_string() {
         let source = "\"This string does not close";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         // Expecting a report of an unterminated string
         assert!(lexer
             .tokens
             .iter()
-            .any(|t| t.token_type == TokenType::Eof && t.lexeme.is_empty()));
+            .any(|t| t.token_type == TokenType::Eof && t.lexeme == interner.get_or_intern("<EOF>")));
     }
 
     #[test]
     fn test_keywords() {
         let source = "class var if else";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         let expected_types = [TokenType::Class,
             TokenType::Var,
@@ -379,7 +394,8 @@ mod tests {
     #[test]
     fn test_identifiers() {
         let source = "foo bar baz";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         let expected_types = [TokenType::Identifier,
             TokenType::Identifier,
@@ -395,7 +411,8 @@ mod tests {
     #[test]
     fn test_mixed_input() {
         let source = "var x = 100; // variable declaration\nfunc(y)";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut interner = Interner::new();
+        let mut lexer = Scanner::new(source.to_string(), &mut interner);
         lexer.scan_tokens();
         let expected_types = [TokenType::Var,
             TokenType::Identifier,

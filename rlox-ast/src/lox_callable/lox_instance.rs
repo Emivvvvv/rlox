@@ -32,7 +32,7 @@ impl LoxInstance {
             return Ok(lox_value.clone());
         }
 
-        if let Some(LoxCallable::Function(method)) = instance.borrow().klass.find_method(&name.lexeme) {
+        if let Some(LoxCallable::Function(method)) = instance.borrow().klass.find_method(name.lexeme) {
             return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method.bind(&instance)))));
         }
 

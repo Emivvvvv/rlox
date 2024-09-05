@@ -4,9 +4,9 @@ use std::fs;
 use std::io;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::Path;
-
+use crate::interner::Interner;
 use crate::interpreter::{Interpreter, RuntimeError};
-use crate::lexer::lexer;
+use crate::lexer::scanner;
 use crate::lexer::token::{Token, TokenType};
 use crate::parser::Parser;
 use crate::resolver::Resolver;
@@ -89,16 +89,17 @@ pub fn run_prompt() -> Result<(), LoxError> {
 }
 
 pub fn run(source: String) -> Result<(), LoxError> {
-    let mut lexer = lexer::Lexer::new(source);
-    lexer.scan_tokens();
-    let mut parser = Parser::new(lexer.tokens);
+    let interner = Interner::new();
+    let mut scanner = scanner::Scanner::new(source, &interner);
+    scanner.scan_tokens();
+    let mut parser = Parser::new(scanner.tokens);
     let statements = parser
         .parse()
         .map_err(|_| LoxError::Error("Error during parsing".to_string()))?;
 
     check_errors()?;
 
-    let locals = Resolver::new().resolve_lox(&statements);
+    let locals = Resolver::new(&interner).resolve_lox(&statements);
 
     check_errors()?;
 

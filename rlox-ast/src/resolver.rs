@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap;
 
 use crate::expr::Expr;
+use crate::interner::{Interner, Symbol};
 use crate::lexer::token::Token;
 use crate::lox;
 use crate::stmt::Stmt;
@@ -81,25 +82,21 @@ enum ClassType {
 }
 
 pub struct Resolver<'a> {
-    scopes: Vec<FxHashMap<&'a str, bool>>,
+    scopes: Vec<FxHashMap<Symbol, bool>>,
     locals: FxHashMap<&'a Expr, usize>,
     current_function: FunctionType,
     current_class: ClassType,
-}
-
-impl<'a> Default for Resolver<'a> {
-    fn default() -> Self {
-        Self::new()
-    }
+    interner: &'a Interner,
 }
 
 impl<'a> Resolver<'a> {
-    pub fn new() -> Self {
+    pub fn new(interner: &'a Interner) -> Self {
         Resolver {
             scopes: Vec::new(),
             locals: FxHashMap::default(),
             current_function: FunctionType::None,
             current_class: ClassType::None,
+            interner
         }
     }
 
@@ -130,24 +127,24 @@ impl<'a> Resolver<'a> {
     fn declare(&mut self, name: &'a Token) {
         let scope = self.scopes.last_mut();
         if let Some(scope) = scope {
-            if scope.contains_key(name.lexeme.as_str()) {
+            if scope.contains_key(&name.lexeme) {
                 lox::error(name, "Already a variable with this name in this scope.");
             }
-            scope.insert(name.lexeme.as_str(), false);
+            scope.insert(name.lexeme, false);
         }
     }
 
     fn define(&mut self, name: &'a Token) {
         let scope = self.scopes.last_mut();
         if let Some(scope) = scope {
-            scope.insert(name.lexeme.as_str(), true);
+            scope.insert(name.lexeme, true);
         }
     }
 
     fn resolve_local(&mut self, expr: &'a Expr, name: &Token) {
         for i in (0..self.scopes.len()).rev() {
             if let Some(scope) = self.scopes.get(i) {
-                if scope.contains_key(name.lexeme.as_str()) {
+                if scope.contains_key(&name.lexeme) {
                     self.locals.insert(expr, self.scopes.len() - 1 - i);
                 }
             }
@@ -187,7 +184,7 @@ impl<'a> Resolver<'a> {
     pub fn variable_expr(&mut self, expr: &'a Expr, name: &Token) {
         let scope = self.scopes.last_mut();
         if let Some(scope) = scope {
-            if let Some(is_defined) = scope.get(name.lexeme.as_str()) {
+            if let Some(is_defined) = scope.get(&name.lexeme) {
                 if !is_defined {
                     lox::error(name, "Can't read local variable in its own initializer.");
                 }
@@ -287,7 +284,7 @@ impl<'a> Resolver<'a> {
             let scope = self.scopes.last_mut();
             match scope {
                 Some(scope) => {
-                    scope.insert("super", true);
+                    scope.insert(self.interner.sym_super, true);
                 }
                 None => return
             }
@@ -297,7 +294,7 @@ impl<'a> Resolver<'a> {
         let scope = self.scopes.last_mut();
         match scope {
             Some(scope) => {
-                scope.insert("this", true);
+                scope.insert(self.interner.sym_this, true);
             }
             None => return
         }
@@ -305,7 +302,7 @@ impl<'a> Resolver<'a> {
         for method in methods {
             match method {
                 Stmt::Function {name, params, body} => {
-                    let declaration = if name.lexeme == "init" {
+                    let declaration = if name.lexeme == self.interner.sym_init {
                         FunctionType::Initializer
                     } else {
                         FunctionType::Method

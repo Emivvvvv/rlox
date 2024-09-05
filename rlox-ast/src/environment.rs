@@ -24,35 +24,35 @@ impl EnvironmentError {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Environment {
-    values: FxHashMap<String, LoxValue>,
-    pub(crate) enclosing: Option<Rc<RefCell<Environment>>>,
+    values: RefCell<FxHashMap<String, LoxValue>>,
+    pub(crate) enclosing: Option<Rc<Environment>>,
 }
 
 impl Environment {
-    pub fn new() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            values: FxHashMap::default(),
+    pub fn new() -> Rc<Self> {
+        Rc::new(Self {
+            values: RefCell::new(FxHashMap::default()),
             enclosing: None,
-        }))
+        })
     }
 
-    pub fn with_enclosing(enclosing: Rc<RefCell<Environment>>) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            values: FxHashMap::default(),
+    pub fn with_enclosing(enclosing: Rc<Environment>) -> Rc<Self> {
+        Rc::new(Self {
+            values: RefCell::new(FxHashMap::default()),
             enclosing: Some(enclosing),
-        }))
+        })
     }
 
-    pub fn define(&mut self, name: String, value: LoxValue) -> Option<LoxValue> {
-        self.values.insert(name, value)
+    pub fn define(&self, name: String, value: LoxValue) -> Option<LoxValue> {
+        self.values.borrow_mut().insert(name, value)
     }
 
     pub fn get(&self, name: &Token) -> Result<LoxValue, EnvironmentError> {
-        match self.values.get(&name.lexeme) {
+        match self.values.borrow().get(&name.lexeme) {
             Some(value) => Ok(value.clone()),
             None => {
                 if let Some(enclosing) = &self.enclosing {
-                    enclosing.borrow().get(name)
+                    enclosing.get(name)
                 } else {
                     Err(EnvironmentError::UndefinedVariable(format!(
                         "Undefined variable '{}'.",
@@ -63,12 +63,12 @@ impl Environment {
         }
     }
 
-    pub fn assign(&mut self, name: &Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
-        if self.values.contains_key(&name.lexeme) {
-            self.values.insert(name.lexeme.clone(), value);
+    pub fn assign(&self, name: &Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
+        if self.values.borrow().contains_key(&name.lexeme) {
+            self.values.borrow_mut().insert(name.lexeme.clone(), value);
             Ok(LoxValue::Boolean(true))
         } else if let Some(enclosing) = &self.enclosing {
-            enclosing.borrow_mut().assign(name, value)
+            enclosing.assign(name, value)
         } else {
             Err(EnvironmentError::UndefinedVariable(format!(
                 "Undefined variable '{}'.",
@@ -77,10 +77,10 @@ impl Environment {
         }
     }
 
-    pub fn get_at(env: Rc<RefCell<Environment>>, distance: usize, name: &String) -> Result<LoxValue, EnvironmentError> {
+    pub fn get_at(env: Rc<Environment>, distance: usize, name: &String) -> Result<LoxValue, EnvironmentError> {
         Environment::ancestor(env, distance)
-            .borrow()
             .values
+            .borrow()
             .get(name)
             .cloned()
             .ok_or_else(|| EnvironmentError::UndefinedVariable(format!(
@@ -88,21 +88,22 @@ impl Environment {
             )))
     }
 
-    pub fn assign_at(env: Rc<RefCell<Environment>>, distance: usize, name: &Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
-        let binding = Environment::ancestor(env, distance);
-        let mut ancestor_env = binding.borrow_mut();
+    pub fn assign_at(env: Rc<Environment>, distance: usize, name: &Token, value: LoxValue) -> Result<LoxValue, EnvironmentError> {
+        let ancestor_env = Environment::ancestor(env, distance);
 
-        ancestor_env.values.insert(name.lexeme.clone(), value)
+        let x = ancestor_env.values.borrow_mut().insert(name.lexeme.clone(), value)
             .ok_or_else(|| EnvironmentError::AssignVariableError(format!(
                 "Couldn't assign variable '{}' at distance '{}'.", name.lexeme, distance
-            )))
+            )));
+
+        x
     }
 
 
-    pub fn ancestor(env: Rc<RefCell<Environment>>, distance: usize) -> Rc<RefCell<Environment>> {
+    pub fn ancestor(env: Rc<Environment>, distance: usize) -> Rc<Environment> {
         let mut environment = env;
         for _ in 0..distance {
-            let next_env = environment.borrow().enclosing.as_ref()
+            let next_env = environment.enclosing.as_ref()
                 .expect("Ancestor not found.")
                 .clone();
             environment = next_env;

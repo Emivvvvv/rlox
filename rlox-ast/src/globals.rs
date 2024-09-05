@@ -1,17 +1,16 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::environment::Environment;
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_value::{LoxCallable, LoxValue, NativeFunctions};
 
-pub fn define_globals(global_environment: &Rc<RefCell<Environment>>) {
-    global_environment.borrow_mut().define(
+pub fn define_globals(global_environment: &Rc<Environment>) {
+    global_environment.define(
         "clock".to_string(),
         LoxValue::Callable(LoxCallable::NativeFunction(NativeFunctions::ClockFunction(Rc::new(ClockFunction)))),
     );
 
-    global_environment.borrow_mut().define(
+    global_environment.define(
         "input".to_string(),
         LoxValue::Callable(LoxCallable::NativeFunction(NativeFunctions::InputFunction(Rc::new(InputFunction)))),
     );

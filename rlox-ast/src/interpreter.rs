@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
@@ -115,8 +114,8 @@ impl Evaluable for Stmt {
 
 #[derive(Debug)]
 pub struct Interpreter<'a> {
-    globals: Rc<RefCell<Environment>>,
-    environment: Rc<RefCell<Environment>>,
+    globals: Rc<Environment>,
+    environment: Rc<Environment>,
     locals: FxHashMap<&'a Expr, usize>,
 }
 
@@ -157,7 +156,7 @@ impl<'a> Interpreter<'a> {
         }
     }
 
-    pub fn get_globals(&self) -> Rc<RefCell<Environment>> {
+    pub fn get_globals(&self) -> Rc<Environment> {
         Rc::clone(&self.globals)
     }
 
@@ -266,7 +265,7 @@ impl<'a> Interpreter<'a> {
             },
             None => {
                 // Call get with the globals environment wrapped in Rc<RefCell<Environment>>
-                self.globals.borrow_mut().get(name)
+                self.globals.get(name)
                     .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
             },
         }
@@ -283,7 +282,7 @@ impl<'a> Interpreter<'a> {
             },
             None => {
                 // Call assign with the globals environment wrapped in Rc<RefCell<Environment>>
-                self.globals.borrow_mut().assign(name, value)
+                self.globals.assign(name, value)
                     .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))
             },
         }
@@ -431,7 +430,6 @@ impl<'a> Interpreter<'a> {
         let final_value = value.unwrap_or_else(|| LoxValue::Nil);
 
         self.environment
-            .borrow_mut()
             .define(name.lexeme.clone(), final_value);
 
         Ok(LoxValue::Nil)
@@ -440,7 +438,7 @@ impl<'a> Interpreter<'a> {
     pub fn evaluate_block_stmt(
         &mut self,
         statements: &[Stmt],
-        environment: Option<Rc<RefCell<Environment>>>,
+        environment: Option<Rc<Environment>>,
     ) -> Result<LoxValue, RuntimeError> {
         let previous_environment = Rc::clone(&self.environment);
 
@@ -512,11 +510,11 @@ impl<'a> Interpreter<'a> {
             }
         }
 
-        self.environment.borrow_mut().define(name.lexeme.clone(), LoxValue::Nil);
+        self.environment.define(name.lexeme.clone(), LoxValue::Nil);
 
         if superclass.is_some() {
             self.environment = Environment::with_enclosing(Rc::clone(&self.environment));
-            self.environment.borrow_mut().define("super".to_string(), superclass_lox_value);
+            self.environment.define("super".to_string(), superclass_lox_value);
         }
 
         let mut mapped_methods: FxHashMap<String, LoxCallable> = FxHashMap::default();
@@ -536,11 +534,11 @@ impl<'a> Interpreter<'a> {
         let rc_refcell_klass = Rc::new(LoxClass::new(name.lexeme.clone(), superclass_option, mapped_methods));
 
         if superclass.is_some() {
-            let enclosing = self.environment.borrow_mut().enclosing.clone().unwrap();
+            let enclosing = self.environment.enclosing.clone().unwrap();
             self.environment = enclosing;
         }
 
-        self.environment.borrow_mut().assign(name, LoxValue::Callable(LoxCallable::Class(rc_refcell_klass))).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))?;
+        self.environment.assign(name, LoxValue::Callable(LoxCallable::Class(rc_refcell_klass))).map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))?;
 
         Ok(LoxValue::Nil)
     }
@@ -562,7 +560,6 @@ impl<'a> Interpreter<'a> {
         let callable = LoxCallable::Function(Rc::new(function));
 
         self.environment
-            .borrow_mut()
             .define(name.lexeme.clone(), LoxValue::Callable(callable));
 
         Ok(LoxValue::Nil)
@@ -905,7 +902,6 @@ mod interpreter_tests {
 
         // Define a variable in the global scope
         global_env
-            .borrow_mut()
             .define("x".to_string(), LoxValue::Number(10.0));
 
         // Block that defines a new variable and should revert to the global environment
@@ -950,7 +946,6 @@ mod interpreter_tests {
 
         // Define variable 'a' in global scope
         global_env
-            .borrow_mut()
             .define("a".to_string(), LoxValue::String("first".to_string()));
 
         // Assign new value to 'a'

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use rustc_hash::FxHashMap;
 use std::rc::Rc;
-
+use crate::interner::Symbol;
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_callable::callable::Callable;
 use crate::lox_callable::lox_instance::LoxInstance;
@@ -12,14 +12,14 @@ pub struct LoxClass {
     display_name: String,
     name: String,
     superclass: Option<Rc<LoxClass>>,
-    methods: FxHashMap<String, LoxCallable>,
+    methods: FxHashMap<Symbol, LoxCallable>,
 }
 
 impl LoxClass {
     pub fn new(
         name: String,
         superclass: Option<Rc<LoxClass>>,
-        methods: FxHashMap<String, LoxCallable>,
+        methods: FxHashMap<Symbol, LoxCallable>,
     ) -> Self {
         Self {
             display_name: format!("class {}", name),
@@ -65,7 +65,7 @@ impl LoxClass {
         &self.name
     }
 
-    pub fn find_method(&self, name: &String) -> Option<&LoxCallable> {
+    pub fn find_method(&self, name: &Symbol) -> Option<&LoxCallable> {
         self.methods.get(name).or_else(|| {
             self.superclass.as_ref().and_then(|superclass| superclass.find_method(name))
         })

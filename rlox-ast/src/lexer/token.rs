@@ -3,6 +3,7 @@ use std::hash::Hash;
 
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use crate::interner::Symbol;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum TokenType {
@@ -83,7 +84,7 @@ impl fmt::Display for Hf64 {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum Literal {
-    Str(String),
+    Str(Symbol),
     Num(Hf64),
     True,
     False,
@@ -93,13 +94,13 @@ pub enum Literal {
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Token {
     pub token_type: TokenType,
-    pub lexeme: String,
+    pub lexeme: Symbol,
     pub literal: Literal,
     pub line: usize,
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, lexeme: String, literal: Literal, line: usize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: Symbol, literal: Literal, line: usize) -> Self {
         Token {
             token_type,
             lexeme,
