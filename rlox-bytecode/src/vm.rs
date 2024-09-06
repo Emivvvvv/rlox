@@ -12,7 +12,7 @@ const STACK_MAX: usize = 256;
 pub struct VM {
     chunk: Chunk,
     ip: *const OpCode,
-    stack: [*mut Value; STACK_MAX],
+    stack: [Value; STACK_MAX],
     stack_top: usize,
 }
 
@@ -33,7 +33,7 @@ impl VM {
         VM {
             chunk: Chunk::new(),
             ip: ptr::null(),
-            stack: [ptr::null_mut(); STACK_MAX], // Initialize with null pointers
+            stack: [Value::new_nil(); STACK_MAX],
             stack_top: 0,
         }
     }
@@ -62,7 +62,9 @@ impl VM {
         self.stack_top = 0;
     }
 
-    fn push(&mut self, value: *mut Value) {
+    //
+
+    fn push(&mut self, value: Value) {
         if self.stack_top >= STACK_MAX {
             panic!("Stack overflow!");
         }
@@ -70,7 +72,7 @@ impl VM {
         self.stack_top += 1;
     }
 
-    fn pop(&mut self) -> *mut Value {
+    fn pop(&mut self) -> Value {
         if self.stack_top == 0 {
             panic!("Stack underflow!");
         }
@@ -78,11 +80,15 @@ impl VM {
         self.stack[self.stack_top]
     }
 
-    fn peek(&self, distance: usize) -> &*mut Value {
+    fn peek(&self, distance: usize) -> &Value {
         if self.stack_top == 0 || self.stack_top <= distance {
             panic!("Stack underflow during peek!");
         }
         &self.stack[self.stack_top - distance - 1]
+    }
+
+    fn is_falsey(&self, value: Value) -> bool {
+        value.is_nil() || (value.is_bool() && !value.as_bool())
     }
 
     unsafe fn run(&mut self) -> Result<(), InterpretError> {
@@ -96,11 +102,52 @@ impl VM {
 
         macro_rules! binary_op {
             ($op:tt) => {{
+                if !self.peek(0).is_number() || !self.peek(1).is_number() {
+                    runtime_error!("Operands must be numbers.");
+                }
+
                 let b = self.pop();
                 let a = self.pop();
-                let _ = &mut *a $op &mut *b;
+                let _ = a $op b;
                 self.push(a);
+
             }};
+        }
+
+        macro_rules! cmp_op {
+            ($op:tt) => {{
+                if !self.peek(0).is_number() || !self.peek(1).is_number() {
+                    runtime_error!("Operands must be numbers.");
+                }
+
+                let b = self.pop();
+                let a = self.pop();
+                let res = a $op b;
+                self.push(Value::new_bool(res));
+            }};
+        }
+
+        macro_rules! runtime_error {
+            ( $format:expr) => {{
+                eprintln!($format);
+
+                let instruction = self.ip as usize - self.chunk.code as usize;
+                let line = self.chunk.lines[instruction];
+                eprintln!("[line {:>4}] in script", line);
+
+                self.reset_stack();
+            }};
+            ( $format:expr, $( $arg:expr),* ) => {{
+                eprintln!($format, $( $arg ),*);
+
+                let instruction = self.ip as usize - self.chunk.code as usize;
+                let line = self.chunk.lines[instruction];
+                eprintln!("[line {:>4}] in script", line);
+
+                self.reset_stack();
+
+                return Err(InterpretError::RuntimeError)
+            }}
         }
 
         #[cfg(debug_assertions)]
@@ -118,18 +165,38 @@ impl VM {
 
             match *instruction {
                 OpCode::OpConstant(constant) => {
-                    let value_ptr = &mut self.chunk.constants[constant] as *mut Value;
-                    self.push(value_ptr);
+                    let value = self.chunk.constants[constant];
+                    self.push(value);
                 }
+                OpCode::OpTrue => self.push(Value::new_bool(true)),
+                OpCode::OpFalse => self.push(Value::new_bool(false)),
+                OpCode::OpEqual => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    self.push(Value::new_bool(a == b))
+                }
+                OpCode::OpNil => self.push(Value::new_nil()),
+                OpCode::OpGreater => cmp_op!(>),
+                OpCode::OpLess => cmp_op!(<),
                 OpCode::OpAdd => binary_op!(+),
                 OpCode::OpSubtract => binary_op!(-),
                 OpCode::OpMultiply => binary_op!(*),
                 OpCode::OpDivide => binary_op!(/),
+                OpCode::OpNot => {
+                    let pop_value = self.pop();
+                    let falsey = self.is_falsey(pop_value);
+                    self.push(Value::new_bool(falsey))
+                }
                 OpCode::OpNegate => {
-                    let _ = -&mut **self.peek(0);
+                    if !self.peek(0).is_number() {
+                        runtime_error!("Operand must be a number.");
+                        return Err(InterpretError::RuntimeError);
+                    }
+                    let popped_value = self.pop();
+                    self.push(-popped_value);
                 }
                 OpCode::OpReturn => {
-                    print!("{}", *self.pop());
+                    print!("{}", self.pop());
                     println!();
                     return Ok(());
                 }
@@ -141,13 +208,7 @@ impl VM {
     fn trace_execution(&self, instruction: &OpCode, i: &mut usize, offset: &mut usize) {
         print!("          ");
         for slot in self.stack.iter().take(self.stack_top) {
-            if !slot.is_null() {
-                unsafe {
-                    print!("[ {} ]", **slot);
-                }
-            } else {
-                print!("Undefined behaviour: reached [ null ] stack slot!");
-            }
+            print!("[ {} ]", slot);
         }
         println!();
         disassemble_instruction(&self.chunk, instruction, *i, offset);

@@ -1,15 +1,22 @@
-use std::ptr;
-use std::mem;
 use crate::memory::reallocate;
 use crate::value::{Value, ValueArray};
+use std::mem;
+use std::ptr;
 
 #[derive(Debug)]
 pub enum OpCode {
     OpConstant(usize),
+    OpNil,
+    OpTrue,
+    OpFalse,
+    OpEqual,
+    OpGreater,
+    OpLess,
     OpAdd,
     OpSubtract,
     OpMultiply,
     OpDivide,
+    OpNot,
     OpNegate,
     OpReturn,
 }
@@ -44,10 +51,7 @@ impl Chunk {
 
         unsafe {
             let value: *const OpCode = &byte;
-            ptr::copy_nonoverlapping(
-                value,
-                self.code.add(self.count),
-                1)
+            ptr::copy_nonoverlapping(value, self.code.add(self.count), 1)
         }
         self.count += 1;
 

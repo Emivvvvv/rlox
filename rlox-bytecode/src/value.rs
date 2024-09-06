@@ -1,7 +1,8 @@
+use std::cmp::Ordering;
 use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ValueType {
     Bool,
     Nil,
@@ -14,7 +15,7 @@ union V {
     number: f64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Value {
     typ: ValueType,
     _as: V,
@@ -79,61 +80,81 @@ impl PartialEq for Value {
     }
 }
 
-impl Add for &mut Value {
+impl Add for Value {
     type Output = Self;
 
-    fn add(self, other: Self) -> Self::Output {
+    fn add(mut self, other: Self) -> Self::Output {
         match (&self.typ, &other.typ) {
-            (ValueType::Number, ValueType::Number) => self._as = V {number: self.as_number() + other.as_number()},
-            _ => panic!("undefined behaviour")
+            (ValueType::Number, ValueType::Number) => {
+                self._as = V {
+                    number: self.as_number() + other.as_number(),
+                }
+            }
+            _ => panic!("undefined behaviour"),
         }
         self
     }
 }
 
-impl Sub for &mut Value {
+impl Sub for Value {
     type Output = Self;
 
-    fn sub(self, other: Self) -> Self::Output {
+    fn sub(mut self, other: Self) -> Self::Output {
         match (&self.typ, &other.typ) {
-            (ValueType::Number, ValueType::Number) => self._as = V {number: self.as_number() - other.as_number()},
-            _ => panic!("undefined behaviour")
+            (ValueType::Number, ValueType::Number) => {
+                self._as = V {
+                    number: self.as_number() - other.as_number(),
+                }
+            }
+            _ => panic!("undefined behaviour"),
         }
         self
     }
 }
 
-impl Mul for &mut Value {
+impl Mul for Value {
     type Output = Self;
 
-    fn mul(self, other: Self) -> Self::Output {
+    fn mul(mut self, other: Self) -> Self::Output {
         match (&self.typ, &other.typ) {
-            (ValueType::Number, ValueType::Number) => self._as = V {number: self.as_number() * other.as_number()},
-            _ => panic!("undefined behaviour")
+            (ValueType::Number, ValueType::Number) => {
+                self._as = V {
+                    number: self.as_number() * other.as_number(),
+                }
+            }
+            _ => panic!("undefined behaviour"),
         }
         self
     }
 }
 
-impl Div for &mut Value {
+impl Div for Value {
     type Output = Self;
 
-    fn div(self, other: Self) -> Self::Output {
+    fn div(mut self, other: Self) -> Self::Output {
         match (&self.typ, &other.typ) {
-            (ValueType::Number, ValueType::Number) => self._as = V {number: self.as_number() / other.as_number()},
-            _ => panic!("undefined behaviour")
+            (ValueType::Number, ValueType::Number) => {
+                self._as = V {
+                    number: self.as_number() / other.as_number(),
+                }
+            }
+            _ => panic!("undefined behaviour"),
         }
         self
     }
 }
 
-impl Neg for &mut Value {
+impl Neg for Value {
     type Output = Self;
 
-    fn neg(self) -> Self::Output {
+    fn neg(mut self) -> Self::Output {
         match &self.typ {
-            ValueType::Number => self._as = V {number: -self.as_number()},
-            _ => panic!("undefined behaviour")
+            ValueType::Number => {
+                self._as = V {
+                    number: -self.as_number(),
+                }
+            }
+            _ => panic!("undefined behaviour"),
         }
         self
     }
@@ -157,6 +178,31 @@ impl fmt::Display for Value {
             ValueType::Bool => write!(f, "{}", self.as_bool()),
             ValueType::Nil => write!(f, "nil"),
             ValueType::Number => write!(f, "{}", self.as_number()),
+        }
+    }
+}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self.typ, other.typ) {
+            (ValueType::Number, ValueType::Number) => {
+                self.as_number().partial_cmp(&other.as_number())
+            }
+            _ => None, // Only numbers are comparable
+        }
+    }
+
+    fn lt(&self, other: &Self) -> bool {
+        match (self.typ, other.typ) {
+            (ValueType::Number, ValueType::Number) => self.as_number() < other.as_number(),
+            _ => panic!("Comparison is only valid between numbers"),
+        }
+    }
+
+    fn gt(&self, other: &Self) -> bool {
+        match (self.typ, other.typ) {
+            (ValueType::Number, ValueType::Number) => self.as_number() > other.as_number(),
+            _ => panic!("Comparison is only valid between numbers"),
         }
     }
 }

@@ -50,6 +50,7 @@ enum PrefixOperation {
     Grouping,
     Unary,
     Number,
+    Literal,
     None,
 }
 
@@ -86,12 +87,19 @@ pub struct Compiler<'a> {
     scanner: Scanner<'a>,
     parser: Parser<'a>,
     chunk: Chunk,
-    parse_rules: [ParseRule; 6],
+    parse_rules: [ParseRule; RULE_ARRAY_LENGTH],
 }
+
+const RULE_ARRAY_LENGTH: usize = 10;
 
 impl<'a> Compiler<'a> {
     pub(crate) fn new(source: &'a str) -> Self {
-        let parse_rules: [ParseRule; 6] = [
+        let parse_rules: [ParseRule; RULE_ARRAY_LENGTH] = [
+            ParseRule {
+                prefix: PrefixOperation::None,
+                infix: InfixOperation::None,
+                precedence: Precedence::None,
+            }, // None
             ParseRule {
                 prefix: PrefixOperation::Grouping,
                 infix: InfixOperation::None,
@@ -111,17 +119,32 @@ impl<'a> Compiler<'a> {
                 prefix: PrefixOperation::None,
                 infix: InfixOperation::Binary,
                 precedence: Precedence::Factor,
-            }, // Slash & Star
+            }, // Slash, Star
             ParseRule {
                 prefix: PrefixOperation::Number,
                 infix: InfixOperation::None,
                 precedence: Precedence::None,
             }, // Number
             ParseRule {
-                prefix: PrefixOperation::None,
+                prefix: PrefixOperation::Literal,
                 infix: InfixOperation::None,
                 precedence: Precedence::None,
-            }, // None
+            }, // True, False, Nil
+            ParseRule {
+                prefix: PrefixOperation::Unary,
+                infix: InfixOperation::None,
+                precedence: Precedence::None,
+            }, // Bang
+            ParseRule {
+                prefix: PrefixOperation::None,
+                infix: InfixOperation::Binary,
+                precedence: Precedence::Equality,
+            }, // BangEqual
+            ParseRule {
+                prefix: PrefixOperation::None,
+                infix: InfixOperation::Binary,
+                precedence: Precedence::Comparison,
+            }, // EqualEqual, Greater, GreaterEqual, Less, LessEqual
         ];
 
         Compiler {
@@ -242,11 +265,26 @@ impl<'a> Compiler<'a> {
 
         // Emit the operator instruction
         match operator_type {
+            TokenType::BangEqual => self.emit_bytes(OpCode::OpEqual, OpCode::OpNot),
+            TokenType::EqualEqual => self.emit_byte(OpCode::OpEqual),
+            TokenType::Greater => self.emit_byte(OpCode::OpGreater),
+            TokenType::GreaterEqual => self.emit_bytes(OpCode::OpLess, OpCode::OpNot),
+            TokenType::Less => self.emit_byte(OpCode::OpLess),
+            TokenType::LessEqual => self.emit_bytes(OpCode::OpGreater, OpCode::OpNot),
             TokenType::Plus => self.emit_byte(OpCode::OpAdd),
             TokenType::Minus => self.emit_byte(OpCode::OpSubtract),
             TokenType::Star => self.emit_byte(OpCode::OpMultiply),
             TokenType::Slash => self.emit_byte(OpCode::OpDivide),
             _ => unimplemented!(),
+        }
+    }
+
+    fn literal(&mut self) {
+        match self.parser.previous.typ {
+            TokenType::True => self.emit_byte(OpCode::OpTrue),
+            TokenType::False => self.emit_byte(OpCode::OpFalse),
+            TokenType::Nil => self.emit_byte(OpCode::OpNil),
+            _ => unreachable!(),
         }
     }
 
@@ -268,6 +306,7 @@ impl<'a> Compiler<'a> {
 
         // Emit the operator instruction.
         match operator_type {
+            TokenType::Bang => self.emit_byte(OpCode::OpNot),
             TokenType::Minus => self.emit_byte(OpCode::OpNegate),
             _ => unimplemented!(),
         }
@@ -283,6 +322,7 @@ impl<'a> Compiler<'a> {
             PrefixOperation::Grouping => self.grouping(),
             PrefixOperation::Unary => self.unary(),
             PrefixOperation::Number => self.number(),
+            PrefixOperation::Literal => self.literal(),
             PrefixOperation::None => {
                 self.error("Expect expression.");
                 return;
@@ -304,12 +344,20 @@ impl<'a> Compiler<'a> {
 
     fn get_rule(&self, kind: &TokenType) -> &ParseRule {
         match kind {
-            TokenType::LeftParen => &self.parse_rules[0],
-            TokenType::Minus => &self.parse_rules[1],
-            TokenType::Plus => &self.parse_rules[2],
-            TokenType::Slash | TokenType::Star => &self.parse_rules[3],
-            TokenType::Number => &self.parse_rules[4],
-            _ => &self.parse_rules[5],
+            TokenType::LeftParen => &self.parse_rules[1],
+            TokenType::Minus => &self.parse_rules[2],
+            TokenType::Plus => &self.parse_rules[3],
+            TokenType::Slash | TokenType::Star => &self.parse_rules[4],
+            TokenType::Number => &self.parse_rules[5],
+            TokenType::True | TokenType::False | TokenType::Nil => &self.parse_rules[6],
+            TokenType::Bang => &self.parse_rules[7],
+            TokenType::BangEqual => &self.parse_rules[8],
+            TokenType::EqualEqual
+            | TokenType::Greater
+            | TokenType::GreaterEqual
+            | TokenType::Less
+            | TokenType::LessEqual => &self.parse_rules[9],
+            _ => &self.parse_rules[0],
         }
     }
 

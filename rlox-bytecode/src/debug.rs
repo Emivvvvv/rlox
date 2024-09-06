@@ -35,12 +35,21 @@ pub fn disassemble_instruction(chunk: &Chunk, instruction: &OpCode, i: usize, of
         print!("{:>4} ", chunk.lines[i])
     }
     match instruction {
-        OpCode::OpConstant(constant_index) => constant_instruction("OP_CONSTANT", chunk, *constant_index, offset),
-        OpCode::OpAdd => simple_instruction("OpReturn", offset),
-        OpCode::OpSubtract => simple_instruction("OpSubtract", offset),
-        OpCode::OpMultiply => simple_instruction("OpMultiply", offset),
-        OpCode::OpDivide => simple_instruction("OpDivide", offset),
-        OpCode::OpNegate => simple_instruction("OpNegate", offset),
-        OpCode::OpReturn => simple_instruction("OpReturn", offset),
+        OpCode::OpConstant(constant_index) => {
+            constant_instruction("OP_CONSTANT", chunk, *constant_index, offset)
+        }
+        OpCode::OpNil => simple_instruction("OP_NIL", offset),
+        OpCode::OpTrue => simple_instruction("OP_TRUE", offset),
+        OpCode::OpFalse => simple_instruction("OP_FALSE", offset),
+        OpCode::OpEqual => simple_instruction("OP_EQUAL", offset),
+        OpCode::OpGreater => simple_instruction("OP_GREATER", offset),
+        OpCode::OpLess => simple_instruction("OP_LESS", offset),
+        OpCode::OpAdd => simple_instruction("OP_ADD", offset),
+        OpCode::OpSubtract => simple_instruction("OP_SUBTRACT", offset),
+        OpCode::OpMultiply => simple_instruction("OP_MULTIPLY", offset),
+        OpCode::OpDivide => simple_instruction("OP_DIVIDE", offset),
+        OpCode::OpNot => simple_instruction("OP_NOT", offset),
+        OpCode::OpNegate => simple_instruction("OP_NEGATE", offset),
+        OpCode::OpReturn => simple_instruction("OP_RETURN", offset),
     }
 }
