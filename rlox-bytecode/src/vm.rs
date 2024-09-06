@@ -9,8 +9,8 @@ use crate::debug::disassemble_instruction;
 
 const STACK_MAX: usize = 256;
 
-pub struct VM<'a> {
-    chunk: &'a mut Chunk,
+pub struct VM {
+    chunk: Chunk,
     ip: *const OpCode,
     stack: [*mut Value; STACK_MAX],
     stack_top: usize,
@@ -22,13 +22,38 @@ pub enum InterpretError {
     RuntimeError,
 }
 
-impl<'a> VM<'a> {
-    pub fn new(chunk: &'a mut Chunk) -> Self {
+impl Default for VM {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VM {
+    pub fn new() -> Self {
         VM {
-            chunk,
+            chunk: Chunk::new(),
             ip: ptr::null(),
             stack: [ptr::null_mut(); STACK_MAX], // Initialize with null pointers
             stack_top: 0,
+        }
+    }
+
+    pub fn interpret(&mut self, source: &str) -> Result<(), InterpretError> {
+        let mut compiler = Compiler::new(source);
+
+        // Compile the source and take ownership of the resulting chunk.
+        if let Some(chunk) = compiler.compile() {
+            // Replace the VM's chunk with the compiled chunk.
+            self.chunk = chunk;
+
+            // Set the instruction pointer to the beginning of the chunk's code.
+            self.ip = self.chunk.code;
+
+            // Run the VM with the new chunk.
+            unsafe { self.run() }
+        } else {
+            // If compilation failed, return a compile error.
+            Err(InterpretError::CompileError)
         }
     }
 
@@ -62,11 +87,11 @@ impl<'a> VM<'a> {
 
     unsafe fn run(&mut self) -> Result<(), InterpretError> {
         macro_rules! read_byte {
-            () => ({
+            () => {{
                 let byte = &*self.ip;
                 self.ip = self.ip.add(1);
                 byte
-            });
+            }};
         }
 
         macro_rules! binary_op {
@@ -102,7 +127,7 @@ impl<'a> VM<'a> {
                 OpCode::OpDivide => binary_op!(/),
                 OpCode::OpNegate => {
                     let _ = -&mut **self.peek(0);
-                },
+                }
                 OpCode::OpReturn => {
                     print!("{}", *self.pop());
                     println!();
@@ -125,20 +150,7 @@ impl<'a> VM<'a> {
             }
         }
         println!();
-        disassemble_instruction(self.chunk, instruction, *i, offset);
+        disassemble_instruction(&self.chunk, instruction, *i, offset);
         *i += 1;
     }
-}
-
-// pub fn interpret(chunk: &mut Chunk) -> InterpretResult {
-//     let ip = chunk.code;
-//     let mut vm = VM::new(chunk);
-//     vm.ip = ip;
-//     unsafe { vm.run() }
-// }
-
-pub fn interpret(source: &str) -> Result<(), InterpretError> {
-    let mut compiler = Compiler::new(source);
-    compiler.compile();
-    Ok(())
 }

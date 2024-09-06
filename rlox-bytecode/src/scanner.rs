@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -49,7 +49,8 @@ pub enum TokenType {
     While,
 
     Error,
-    EOF,
+    #[default]
+    Eof,
 }
 
 impl fmt::Display for TokenType {
@@ -59,13 +60,7 @@ impl fmt::Display for TokenType {
     }
 }
 
-impl Default for TokenType {
-    fn default() -> Self {
-        TokenType::EOF
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Token<'b> {
     pub typ: TokenType,
     pub src: &'b str,
@@ -89,10 +84,9 @@ impl<'a> Scanner<'a> {
         }
     }
 
-
     //Return the character at the given position or '\0' if we are out of bound.
     fn char_at(&self, i: usize) -> char {
-        self.source[i..].chars().next().unwrap_or_else(|| '\0')
+        self.source[i..].chars().next().unwrap_or('\0')
     }
 
     fn char(&self) -> char {
@@ -100,17 +94,11 @@ impl<'a> Scanner<'a> {
     }
 
     fn is_alpha(&self, c: char) -> bool {
-        match c {
-            'a'..='z' | 'A'..='Z' | '_' => true,
-            _ => false,
-        }
+        matches!(c, 'a'..='z' | 'A'..='Z' | '_')
     }
 
     fn is_digit(&self, c: char) -> bool {
-        match c {
-            '0'..='9' => true,
-            _ => false,
-        }
+        c.is_ascii_digit()
     }
 
     fn is_at_end(&self) -> bool {
@@ -284,7 +272,7 @@ impl<'a> Scanner<'a> {
         self.start = self.current;
 
         if self.is_at_end() {
-            return self.make_token(TokenType::EOF);
+            return self.make_token(TokenType::Eof);
         }
 
         let c: char = self.advance();

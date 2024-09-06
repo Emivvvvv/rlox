@@ -1,13 +1,13 @@
+use rlox_bytecode::vm::{InterpretError, VM};
 use std::env;
-use std::process::exit;
 use std::fs::File;
 use std::io::{self, BufRead, Read};
-use rlox_bytecode::vm::{interpret, InterpretError};
+use std::process::exit;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let result= match args.len() {
+    let result = match args.len() {
         1 => repl(),
         2 => run_file(&args[1]),
         _ => {
@@ -21,10 +21,9 @@ fn main() {
         Err(interpret_err) => match interpret_err {
             InterpretError::CompileError => exit(65),
             InterpretError::RuntimeError => exit(70),
-        }
+        },
     }
 }
-
 
 fn repl() -> Result<(), InterpretError> {
     let stdin = io::stdin();
@@ -40,8 +39,8 @@ fn repl() -> Result<(), InterpretError> {
         }
 
         // clox implementation don't have .trim() here.
-        match interpret(&line.trim()) {
-            Ok(()) => {},
+        match run(line.trim()) {
+            Ok(()) => {}
             Err(err) => return Err(err),
         }
     }
@@ -64,5 +63,10 @@ fn read_file(path: &str) -> String {
 
 fn run_file(path: &str) -> Result<(), InterpretError> {
     let source = read_file(path);
-    interpret(&source)
+    run(&source)
+}
+
+fn run(source: &str) -> Result<(), InterpretError> {
+    let mut vm = VM::new();
+    vm.interpret(source)
 }
