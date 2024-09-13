@@ -1,28 +1,28 @@
-use crate::expr::Expr;
+use crate::expr::ExprIdx;
 use crate::lexer::token::Token;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     Expression {
-        expression: Expr,
+        expression: ExprIdx,
     },
     Print {
-        expression: Expr,
+        expression: ExprIdx,
     },
     Var {
         name: Token,
-        initializer: Option<Expr>,
+        initializer: Option<ExprIdx>,
     },
     Block {
         statements: Vec<Stmt>,
     },
     If {
-        condition: Expr,
+        condition: ExprIdx,
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
     While {
-        condition: Expr,
+        condition: ExprIdx,
         body: Box<Stmt>,
     },
     Function {
@@ -32,16 +32,16 @@ pub enum Stmt {
     },
     Return {
         keyword: Token,
-        value: Option<Expr>,
+        value: Option<ExprIdx>,
     },
     Class {
         name: Token,
-        superclass: Option<Expr>,
+        superclass: Option<ExprIdx>,
         methods: Vec<Stmt>,
     },
 }
 
-impl From<Stmt> for Option<Expr> {
+impl From<Stmt> for Option<ExprIdx> {
     fn from(val: Stmt) -> Self {
         match val {
             Stmt::Expression { expression } | Stmt::Print { expression } => Some(expression),

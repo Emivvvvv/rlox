@@ -91,18 +91,17 @@ pub fn run_prompt() -> Result<(), LoxError> {
 pub fn run(source: String) -> Result<(), LoxError> {
     let mut lexer = lexer::Lexer::new(source);
     lexer.scan_tokens();
-    let mut parser = Parser::new(lexer.tokens);
-    let statements = parser
+    let parser = Parser::new(lexer.tokens);
+    let (statements, expr_pool) = parser
         .parse()
         .map_err(|_| LoxError::Error("Error during parsing".to_string()))?;
+    check_errors()?;
+
+    let locals = Resolver::new(&expr_pool).resolve_lox(&statements);
 
     check_errors()?;
 
-    let locals = Resolver::new().resolve_lox(&statements);
-
-    check_errors()?;
-
-    let mut interpreter = Interpreter::new_with_locals(locals);
+    let mut interpreter = Interpreter::new(&expr_pool, locals);
     interpreter.interpret(&statements);
 
     Ok(())
