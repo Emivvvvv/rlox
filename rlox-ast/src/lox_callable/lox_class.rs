@@ -35,7 +35,7 @@ impl Callable for LoxClass {
     fn arity(&self, symbol_table: &mut SymbolTable) -> usize {
         let initializer_option = self.find_method(&symbol_table.intern("init"));
         if let Some(LoxCallable::Function(initializer_function)) = initializer_option {
-            initializer_function.arity(symbol_table);
+            return initializer_function.arity(symbol_table);
         }
 
         0

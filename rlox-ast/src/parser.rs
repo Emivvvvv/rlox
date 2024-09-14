@@ -19,7 +19,7 @@ impl<'a> Parser<'a> {
         Self {
             tokens,
             current: 0,
-            expr_pool: ExprPool { exprs: Vec::new() },
+            expr_pool: ExprPool { exprs: Vec::with_capacity(9999) },
             symbol_table
         }
     }
