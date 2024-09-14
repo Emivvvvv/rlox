@@ -7,9 +7,10 @@ use std::path::Path;
 
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lexer::lexer;
-use crate::lexer::token::{Token, TokenType};
+use crate::lexer::token::{ErrorToken, TokenType};
 use crate::parser::Parser;
 use crate::resolver::Resolver;
+use crate::symbol::SymbolTable;
 
 #[derive(Debug)]
 pub enum LoxError {
@@ -55,7 +56,7 @@ pub fn run_file(file_path: &String) -> Result<(), LoxError> {
     let path = Path::new(file_path);
     let file_string = fs::read_to_string(path)?;
 
-    run(file_string)?;
+    run(&file_string)?;
 
     check_errors()?;
 
@@ -78,7 +79,7 @@ pub fn run_prompt() -> Result<(), LoxError> {
             break; // EOF reached
         }
 
-        run(line.trim().to_string())?;
+        run(line.trim())?;
 
         unsafe {
             HAD_ERROR = false;
@@ -88,27 +89,31 @@ pub fn run_prompt() -> Result<(), LoxError> {
     Ok(())
 }
 
-pub fn run(source: String) -> Result<(), LoxError> {
-    let mut lexer = lexer::Lexer::new(source);
-    lexer.scan_tokens();
-    let mut parser = Parser::new(lexer.tokens);
-    let statements = parser
+pub fn run(source: &str) -> Result<(), LoxError> {
+    let mut symbol_table = SymbolTable::new();
+    let lexer_tokens = {
+        let mut lexer = lexer::Lexer::new(source, &mut symbol_table);
+        lexer.scan_tokens();
+
+        lexer.tokens
+    };
+    let parser = Parser::new(&symbol_table, lexer_tokens);
+    let (statements, expr_pool) = parser
         .parse()
         .map_err(|_| LoxError::Error("Error during parsing".to_string()))?;
+    check_errors()?;
+
+    let locals = Resolver::new(&expr_pool, &mut symbol_table).resolve_lox(&statements);
 
     check_errors()?;
 
-    let locals = Resolver::new().resolve_lox(&statements);
-
-    check_errors()?;
-
-    let mut interpreter = Interpreter::new_with_locals(locals);
+    let mut interpreter = Interpreter::new(&expr_pool, &mut symbol_table, locals);
     interpreter.interpret(&statements);
 
     Ok(())
 }
 
-pub fn error(token: &Token, message: &str) {
+pub fn error(token: &ErrorToken, message: &str) {
     if token.token_type == TokenType::Eof {
         report(token.line, " at end", message);
     } else {

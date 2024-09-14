@@ -8,12 +8,13 @@ use crate::lox_value::{LoxCallable, LoxValue};
 use crate::lexer::token::Token;
 use crate::lox_callable::callable::Callable;
 use crate::lox_callable::lox_class::LoxClass;
+use crate::symbol::{Symbol, SymbolTable};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoxInstance {
     display_name: String,
     klass: LoxClass,
-    fields: FxHashMap<String, LoxValue>,
+    fields: FxHashMap<Symbol, LoxValue>,
 }
 
 impl LoxInstance {
@@ -27,13 +28,13 @@ impl LoxInstance {
         }
     }
 
-    pub fn get(instance: Rc<RefCell<LoxInstance>>, name: &Token) -> Result<LoxValue, RuntimeError> {
+    pub fn get(instance: Rc<RefCell<LoxInstance>>, name: &Token, symbol_table: &mut SymbolTable) -> Result<LoxValue, RuntimeError> {
         if let Some(lox_value) = instance.borrow().fields.get(&name.lexeme) {
             return Ok(lox_value.clone());
         }
 
         if let Some(LoxCallable::Function(method)) = instance.borrow().klass.find_method(&name.lexeme) {
-            return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method.bind(&instance)))));
+            return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method.bind(&instance, symbol_table)))));
         }
 
         Err(RuntimeError::InstanceError(
@@ -48,7 +49,7 @@ impl LoxInstance {
 }
 
 impl Callable for LoxInstance {
-    fn arity(&self) -> usize {
+    fn arity(&self, _symbol_table: &mut SymbolTable) -> usize {
         0
     }
 

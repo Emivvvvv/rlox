@@ -1,17 +1,18 @@
 use crate::lexer::token::{Hf64, Token, TokenType, Literal};
 use crate::lox::report;
+use crate::symbol::SymbolTable;
 
-
-pub struct Lexer {
-    source: String,
+pub struct Lexer<'a> {
+    source: &'a str,
     pub tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
+    symbol_table: &'a mut SymbolTable,
 }
 
-impl Lexer {
-    pub fn new(source: String) -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(source: &'a str, symbol_table: &'a mut SymbolTable) -> Self {
         let tokens: Vec<Token> = Vec::new();
         Self {
             source,
@@ -19,6 +20,7 @@ impl Lexer {
             start: 0,
             current: 0,
             line: 1,
+            symbol_table
         }
     }
 
@@ -30,7 +32,7 @@ impl Lexer {
 
         let _ = &self.tokens.push(Token::new(
             TokenType::Eof,
-            "".to_string(),
+            self.symbol_table.intern(""),
             Literal::Nil,
             self.line,
         ));
@@ -121,9 +123,10 @@ impl Lexer {
     }
 
     fn add_token(&mut self, token_type: TokenType, literal: Literal) {
-        let text = self.source[self.start..self.current].to_string();
+        let lexeme_str = &self.source[self.start..self.current];
+        let symbol = self.symbol_table.intern(lexeme_str);
         self.tokens
-            .push(Token::new(token_type, text, literal, self.line))
+            .push(Token::new(token_type, symbol, literal, self.line))
     }
 
     fn match_operators(&mut self, expected: char) -> bool {
@@ -257,14 +260,17 @@ impl Lexer {
 
 #[cfg(test)]
 mod tests {
-    use super::*; // Import everything from the parent module
+    use super::*;
+    use crate::symbol::SymbolTable;
 
     #[test]
     fn test_basic_tokens() {
         let source = "( ) { } , . - + ; * ! = < > /";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        let expected_types = [TokenType::LeftParen,
+        let expected_types = [
+            TokenType::LeftParen,
             TokenType::RightParen,
             TokenType::LeftBrace,
             TokenType::RightBrace,
@@ -279,9 +285,11 @@ mod tests {
             TokenType::Less,
             TokenType::Greater,
             TokenType::Slash,
-            TokenType::Eof];
+            TokenType::Eof,
+        ];
 
         assert_eq!(lexer.tokens.len(), expected_types.len());
+
         for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
         }
@@ -290,87 +298,104 @@ mod tests {
     #[test]
     fn test_string_literal() {
         let source = "\"hello world\"";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
         assert_eq!(lexer.tokens.len(), 2); // String token + EOF
-        assert_eq!(lexer.tokens[0].token_type, TokenType::String);
-        assert_eq!(lexer.tokens[0].lexeme, "\"hello world\"");
+
+        let lexeme_symbol = lexer.tokens[0].lexeme;
+        let lexeme = symbol_table.resolve(lexeme_symbol);
+        assert_eq!(lexeme, "\"hello world\"");
     }
 
     #[test]
     fn test_numbers() {
         let source = "123 456.789";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        println!("{:?}", lexer.tokens);
-        assert_eq!(
-            lexer.tokens.len(),
-            3,
-            "Expected 3 tokens, found {}",
-            lexer.tokens.len()
-        ); // Improved assertion message
-        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[0].lexeme, "123");
-        assert_eq!(lexer.tokens[1].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[1].lexeme, "456.789");
+        assert_eq!(lexer.tokens.len(), 3); // Two number tokens + EOF
+
+        let lexeme1_symbol = lexer.tokens[0].lexeme;
+        let lexeme2_symbol = lexer.tokens[1].lexeme;
+
+        let lexeme1 = symbol_table.resolve(lexeme1_symbol);
+        let lexeme2 = symbol_table.resolve(lexeme2_symbol);
+
+        assert_eq!(lexeme1, "123");
+        assert_eq!(lexeme2, "456.789");
     }
 
     #[test]
     fn test_comments() {
         let source = "// This is a comment\n123";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        // Only the number and EOF should be tokenized, not the comment
-        assert_eq!(lexer.tokens.len(), 2);
-        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[0].lexeme, "123");
+
+        assert_eq!(lexer.tokens.len(), 2); // Number token + EOF
+
+        let lexeme_symbol = lexer.tokens[0].lexeme;
+        let lexeme = symbol_table.resolve(lexeme_symbol);
+        assert_eq!(lexeme, "123");
     }
 
     #[test]
     fn test_block_comments() {
         let source = "/* This is a block comment */ 456";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        // Only the number and EOF should be tokenized, not the block comment
-        assert_eq!(lexer.tokens.len(), 2);
-        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[0].lexeme, "456");
+
+        assert_eq!(lexer.tokens.len(), 2); // Number token + EOF
+
+        let lexeme_symbol = lexer.tokens[0].lexeme;
+        let lexeme = symbol_table.resolve(lexeme_symbol);
+        assert_eq!(lexeme, "456");
     }
 
     #[test]
     fn test_nested_block_comments() {
         let source = "/* This is a /* nested */ block comment */ 789";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        // Only the number and EOF should be tokenized, not the nested block comment
-        assert_eq!(lexer.tokens.len(), 2);
-        assert_eq!(lexer.tokens[0].token_type, TokenType::Number);
-        assert_eq!(lexer.tokens[0].lexeme, "789");
+
+        assert_eq!(lexer.tokens.len(), 2); // Number token + EOF
+
+        let lexeme_symbol = lexer.tokens[0].lexeme;
+        let lexeme = symbol_table.resolve(lexeme_symbol);
+        assert_eq!(lexeme, "789");
     }
 
     #[test]
     fn test_unterminated_string() {
         let source = "\"This string does not close";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        // Expecting a report of an unterminated string
+
         assert!(lexer
             .tokens
             .iter()
-            .any(|t| t.token_type == TokenType::Eof && t.lexeme.is_empty()));
+            .any(|t| t.token_type == TokenType::Eof && symbol_table.resolve(t.lexeme).is_empty()));
     }
 
     #[test]
     fn test_keywords() {
         let source = "class var if else";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        let expected_types = [TokenType::Class,
+        let expected_types = [
+            TokenType::Class,
             TokenType::Var,
             TokenType::If,
             TokenType::Else,
-            TokenType::Eof];
+            TokenType::Eof,
+        ];
         assert_eq!(lexer.tokens.len(), expected_types.len());
+
         for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
         }
@@ -379,25 +404,44 @@ mod tests {
     #[test]
     fn test_identifiers() {
         let source = "foo bar baz";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        let expected_types = [TokenType::Identifier,
+        let expected_types = [
             TokenType::Identifier,
             TokenType::Identifier,
-            TokenType::Eof];
+            TokenType::Identifier,
+            TokenType::Eof,
+        ];
         assert_eq!(lexer.tokens.len(), expected_types.len());
+
         for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
             assert!(matches!(token.literal, Literal::Nil));
         }
+
+        // Extract and resolve symbols
+        let lexeme1_symbol = lexer.tokens[0].lexeme;
+        let lexeme2_symbol = lexer.tokens[1].lexeme;
+        let lexeme3_symbol = lexer.tokens[2].lexeme;
+
+        let lexeme1 = symbol_table.resolve(lexeme1_symbol);
+        let lexeme2 = symbol_table.resolve(lexeme2_symbol);
+        let lexeme3 = symbol_table.resolve(lexeme3_symbol);
+
+        assert_eq!(lexeme1, "foo");
+        assert_eq!(lexeme2, "bar");
+        assert_eq!(lexeme3, "baz");
     }
 
     #[test]
     fn test_mixed_input() {
         let source = "var x = 100; // variable declaration\nfunc(y)";
-        let mut lexer = Lexer::new(source.to_string());
+        let mut symbol_table = SymbolTable::new();
+        let mut lexer = Lexer::new(source, &mut symbol_table);
         lexer.scan_tokens();
-        let expected_types = [TokenType::Var,
+        let expected_types = [
+            TokenType::Var,
             TokenType::Identifier,
             TokenType::Equal,
             TokenType::Number,
@@ -406,8 +450,10 @@ mod tests {
             TokenType::LeftParen,
             TokenType::Identifier,
             TokenType::RightParen,
-            TokenType::Eof];
+            TokenType::Eof,
+        ];
         assert_eq!(lexer.tokens.len(), expected_types.len());
+
         for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
         }

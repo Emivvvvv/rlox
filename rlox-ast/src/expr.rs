@@ -1,47 +1,67 @@
 use crate::lexer::token::{Literal, Token};
 
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Copy)]
+pub struct ExprIdx(pub usize);
+
+#[derive(Debug)]
+pub struct ExprPool {
+    pub exprs: Vec<Expr>,
+}
+
+impl ExprPool {
+    pub fn add_expr(&mut self, expr: Expr) -> ExprIdx {
+        let idx = self.exprs.len();
+        self.exprs.push(expr);
+        ExprIdx(idx)
+    }
+
+    pub fn get_expr(&self, idx: ExprIdx) -> &Expr {
+        &self.exprs[idx.0]
+    }
+}
+
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum Expr {
     Binary {
-        left: Box<Expr>,
+        left: ExprIdx,
         operator: Token,
-        right: Box<Expr>,
+        right: ExprIdx,
     },
     Grouping {
-        expression: Box<Expr>,
+        expression: ExprIdx,
     },
     Literal {
         value: Literal,
     },
     Unary {
         operator: Token,
-        right: Box<Expr>,
+        right: ExprIdx,
     },
     Variable {
         name: Token,
     },
     Assign {
         name: Token,
-        value: Box<Expr>,
+        value: ExprIdx,
     },
     Logical {
-        left: Box<Expr>,
+        left: ExprIdx,
         operator: Token,
-        right: Box<Expr>,
+        right: ExprIdx,
     },
     Call {
-        callee: Box<Expr>,
+        callee: ExprIdx,
         paren: Token,
-        arguments: Vec<Expr>,
+        arguments: Vec<ExprIdx>,
     },
     Get {
-        object: Box<Expr>,
+        object: ExprIdx,
         name: Token,
     },
     Set {
-        object: Box<Expr>,
+        object: ExprIdx,
         name: Token,
-        value: Box<Expr>,
+        value: ExprIdx,
     },
     This {
         keyword: Token,

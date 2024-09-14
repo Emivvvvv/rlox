@@ -8,6 +8,7 @@ use crate::lexer::token::Token;
 use crate::lox_callable::callable::Callable;
 use crate::lox_callable::lox_instance::LoxInstance;
 use crate::stmt::Stmt;
+use crate::symbol::SymbolTable;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoxFunction {
@@ -40,7 +41,7 @@ impl LoxFunction {
 
 impl Callable for LoxFunction {
 
-    fn arity(&self) -> usize {
+    fn arity(&self, _symbol_table: &mut SymbolTable) -> usize {
         self.params.len()
     }
 
@@ -58,9 +59,9 @@ impl Callable for LoxFunction {
 
         // Execute the function body
         match interpreter.evaluate_block_stmt(&self.body, Some(environment)) {
-            Err(RuntimeError::Return(value)) => self.handle_return(value),
+            Err(RuntimeError::Return(value)) => self.handle_return(value, interpreter.symbol_table),
             Err(err) => Err(err), // Propagate other errors
-            Ok(_) => self.handle_return(LoxValue::Nil),
+            Ok(_) => self.handle_return(LoxValue::Nil, interpreter.symbol_table),
         }
     }
 
@@ -71,9 +72,9 @@ impl Callable for LoxFunction {
 }
 
 impl LoxFunction {
-    fn handle_return(&self, value: LoxValue) -> Result<LoxValue, RuntimeError> {
+    fn handle_return(&self, value: LoxValue, symbol_table: &mut SymbolTable) -> Result<LoxValue, RuntimeError> {
         if self.is_initializer {
-            Environment::get_at(Rc::clone(&self.closure), 0, &"this".to_string())
+            Environment::get_at(Rc::clone(&self.closure), 0, &symbol_table.intern("this"), symbol_table)
                 .map_err(|_| {
                     RuntimeError::CustomError("initializer function couldn't find `this`".to_string())
                 })
@@ -82,13 +83,9 @@ impl LoxFunction {
         }
     }
 
-    pub fn get_raw_name(&self) -> &str {
-        &self.name.lexeme
-    }
-
-    pub fn bind(&self, rc_instance: &Rc<RefCell<LoxInstance>>) -> LoxFunction {
+    pub fn bind(&self, rc_instance: &Rc<RefCell<LoxInstance>>, symbol_table: &mut SymbolTable) -> LoxFunction {
         let environment = Environment::with_enclosing(Rc::clone(&self.closure));
-        environment.borrow_mut().define("this".to_string(), LoxValue::Callable(LoxCallable::Instance(Rc::clone(rc_instance))));
+        environment.borrow_mut().define(symbol_table.intern("this"), LoxValue::Callable(LoxCallable::Instance(Rc::clone(rc_instance))));
 
         LoxFunction {
             display_name: self.display_name.clone(),

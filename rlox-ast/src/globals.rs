@@ -5,14 +5,14 @@ use crate::environment::Environment;
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_value::{LoxCallable, LoxValue, NativeFunctions};
 
-pub fn define_globals(global_environment: &Rc<RefCell<Environment>>) {
+pub fn define_globals(global_environment: &Rc<RefCell<Environment>>, symbol_table: &mut SymbolTable) {
     global_environment.borrow_mut().define(
-        "clock".to_string(),
+        symbol_table.intern("clock"),
         LoxValue::Callable(LoxCallable::NativeFunction(NativeFunctions::ClockFunction(Rc::new(ClockFunction)))),
     );
 
     global_environment.borrow_mut().define(
-        "input".to_string(),
+        symbol_table.intern("input"),
         LoxValue::Callable(LoxCallable::NativeFunction(NativeFunctions::InputFunction(Rc::new(InputFunction)))),
     );
 }
@@ -23,7 +23,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub struct ClockFunction;
 
 impl Callable for ClockFunction {
-    fn arity(&self) -> usize {
+    fn arity(&self, _symbol_table: &mut SymbolTable) -> usize {
         0
     }
 
@@ -47,12 +47,13 @@ impl Callable for ClockFunction {
 use std::io;
 use std::io::Write;
 use crate::lox_callable::callable::Callable;
+use crate::symbol::SymbolTable;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct InputFunction;
 
 impl Callable for InputFunction {
-    fn arity(&self) -> usize {
+    fn arity(&self, _symbol_table: &mut SymbolTable) -> usize {
         1
     }
 
