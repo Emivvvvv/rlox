@@ -1,9 +1,10 @@
 use rustc_hash::FxHashMap;
 
 use crate::expr::{Expr, ExprIdx, ExprPool};
-use crate::lexer::token::Token;
+use crate::lexer::token::{ErrorToken, Token};
 use crate::lox;
 use crate::stmt::Stmt;
+use crate::symbol::{Symbol, SymbolTable};
 
 #[derive(Debug)]
 pub enum ResolveError {
@@ -26,21 +27,23 @@ enum ClassType {
 }
 
 pub struct Resolver<'a> {
-    scopes: Vec<FxHashMap<&'a str, bool>>,
+    scopes: Vec<FxHashMap<Symbol, bool>>,
     locals: FxHashMap<ExprIdx, usize>,
     current_function: FunctionType,
     current_class: ClassType,
     expr_pool: &'a ExprPool,
+    symbol_table: &'a mut SymbolTable,
 }
 
 impl<'a> Resolver<'a> {
-    pub fn new(expr_pool: &'a ExprPool) -> Self {
+    pub fn new(expr_pool: &'a ExprPool, symbol_table: &'a mut SymbolTable) -> Self {
         Resolver {
             scopes: Vec::new(),
             locals: FxHashMap::default(),
             current_function: FunctionType::None,
             current_class: ClassType::None,
             expr_pool,
+            symbol_table
         }
     }
 
@@ -129,22 +132,22 @@ impl<'a> Resolver<'a> {
 
     fn declare(&mut self, name: &'a Token) {
         if let Some(scope) = self.scopes.last_mut() {
-            if scope.contains_key(name.lexeme.as_str()) {
-                lox::error(name, "Already a variable with this name in this scope.");
+            if scope.contains_key(&name.lexeme) {
+                lox::error(&ErrorToken::new(name, self.symbol_table), "Already a variable with this name in this scope.");
             }
-            scope.insert(name.lexeme.as_str(), false);
+            scope.insert(name.lexeme, false);
         }
     }
 
     fn define(&mut self, name: &'a Token) {
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.lexeme.as_str(), true);
+            scope.insert(name.lexeme, true);
         }
     }
 
     fn resolve_local(&mut self, expr_idx: ExprIdx, name: &Token) {
         for (i, scope) in self.scopes.iter().rev().enumerate() {
-            if scope.contains_key(name.lexeme.as_str()) {
+            if scope.contains_key(&name.lexeme) {
                 self.locals.insert(expr_idx, i);
                 return;
             }
@@ -167,9 +170,9 @@ impl<'a> Resolver<'a> {
 
     fn variable_expr(&mut self, expr_idx: ExprIdx, name: &Token) {
         if let Some(scope) = self.scopes.last() {
-            if let Some(is_defined) = scope.get(name.lexeme.as_str()) {
+            if let Some(is_defined) = scope.get(&name.lexeme) {
                 if !*is_defined {
-                    lox::error(name, "Can't read local variable in its own initializer.");
+                    lox::error(&ErrorToken::new(name, self.symbol_table), "Can't read local variable in its own initializer.");
                 }
             }
         }
@@ -204,7 +207,7 @@ impl<'a> Resolver<'a> {
 
     fn this_expr(&mut self, expr_idx: ExprIdx, keyword: &Token) {
         if self.current_class == ClassType::None {
-            lox::error(keyword, "Can't use 'this' outside of a class.");
+            lox::error(&ErrorToken::new(keyword, self.symbol_table), "Can't use 'this' outside of a class.");
             return;
         }
         self.resolve_local(expr_idx, keyword);
@@ -212,9 +215,9 @@ impl<'a> Resolver<'a> {
 
     fn super_expr(&mut self, expr_idx: ExprIdx, keyword: &Token) {
         if self.current_class == ClassType::None {
-            lox::error(keyword, "Can't use 'super' outside of a class.");
+            lox::error(&ErrorToken::new(keyword, self.symbol_table), "Can't use 'super' outside of a class.");
         } else if self.current_class != ClassType::Subclass {
-            lox::error(keyword, "Can't use 'super' in a class with no superclass.");
+            lox::error(&ErrorToken::new(keyword, self.symbol_table), "Can't use 'super' in a class with no superclass.");
         }
         self.resolve_local(expr_idx, keyword);
     }
@@ -288,11 +291,11 @@ impl<'a> Resolver<'a> {
 
     fn return_stmt(&mut self, keyword: &Token, value_idx: Option<ExprIdx>) {
         if self.current_function == FunctionType::None {
-            lox::error(keyword, "Can't return from top-level code.");
+            lox::error(&ErrorToken::new(keyword, self.symbol_table), "Can't return from top-level code.");
         }
         if let Some(value_idx) = value_idx {
             if self.current_function == FunctionType::Initializer {
-                lox::error(keyword, "Can't return a value from an initializer.");
+                lox::error(&ErrorToken::new(keyword, self.symbol_table), "Can't return a value from an initializer.");
             }
             self.resolve_expr(value_idx);
         }
@@ -316,28 +319,28 @@ impl<'a> Resolver<'a> {
             let superclass_expr = self.expr_pool.get_expr(superclass_idx);
             if let Expr::Variable { name } = superclass_expr {
                 if name.lexeme == class_name.lexeme {
-                    lox::error(name, "A class can't inherit from itself.");
+                    lox::error(&ErrorToken::new(name, self.symbol_table), "A class can't inherit from itself.");
                 }
             } else {
-                lox::error(class_name, "Superclass must be a variable.");
+                lox::error(&ErrorToken::new(class_name, self.symbol_table), "Superclass must be a variable.");
             }
 
             self.resolve_expr(superclass_idx);
 
             self.begin_scope();
             if let Some(scope) = self.scopes.last_mut() {
-                scope.insert("super", true);
+                scope.insert(self.symbol_table.intern("super"), true);
             }
         }
 
         self.begin_scope();
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert("this", true);
+            scope.insert(self.symbol_table.intern("this"), true);
         }
 
         for method in methods {
             if let Stmt::Function { name, params, body } = method {
-                let declaration = if name.lexeme == "init" {
+                let declaration = if name.lexeme == self.symbol_table.intern("init") {
                     FunctionType::Initializer
                 } else {
                     FunctionType::Method

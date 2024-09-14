@@ -9,3 +9,4 @@ pub mod resolver;
 pub mod stmt;
 pub mod lox_value;
 pub mod lox_callable;
+pub mod symbol;

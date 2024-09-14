@@ -2,9 +2,10 @@ use core::fmt;
 
 use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_value::LoxValue;
+use crate::symbol::SymbolTable;
 
 pub trait Callable {
-    fn arity(&self) -> usize;
+    fn arity(&self, symbol_table: &mut SymbolTable) -> usize;
     fn call(
         &self,
         interpreter: &mut Interpreter,

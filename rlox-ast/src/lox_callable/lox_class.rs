@@ -6,20 +6,21 @@ use crate::interpreter::{Interpreter, RuntimeError};
 use crate::lox_callable::callable::Callable;
 use crate::lox_callable::lox_instance::LoxInstance;
 use crate::lox_value::{LoxCallable, LoxValue};
+use crate::symbol::{Symbol, SymbolTable};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoxClass {
     display_name: String,
     name: String,
     superclass: Option<Rc<LoxClass>>,
-    methods: FxHashMap<String, LoxCallable>,
+    methods: FxHashMap<Symbol, LoxCallable>,
 }
 
 impl LoxClass {
     pub fn new(
         name: String,
         superclass: Option<Rc<LoxClass>>,
-        methods: FxHashMap<String, LoxCallable>,
+        methods: FxHashMap<Symbol, LoxCallable>,
     ) -> Self {
         Self {
             display_name: format!("class {}", name),
@@ -31,10 +32,10 @@ impl LoxClass {
 }
 
 impl Callable for LoxClass {
-    fn arity(&self) -> usize {
-        let initializer_option = self.find_method(&"init".to_string());
+    fn arity(&self, symbol_table: &mut SymbolTable) -> usize {
+        let initializer_option = self.find_method(&symbol_table.intern("init"));
         if let Some(LoxCallable::Function(initializer_function)) = initializer_option {
-            initializer_function.arity();
+            initializer_function.arity(symbol_table);
         }
 
         0
@@ -47,9 +48,9 @@ impl Callable for LoxClass {
     ) -> Result<LoxValue, RuntimeError> {
         let instance = Rc::new(RefCell::new(LoxInstance::new(self)));
 
-        let initializer_option = self.find_method(&"init".to_string());
+        let initializer_option = self.find_method(&interpreter.symbol_table.intern("init"));
         if let Some(LoxCallable::Function(initializer_function)) = initializer_option {
-            initializer_function.bind(&instance).call(interpreter, arguments)?;
+            initializer_function.bind(&instance, interpreter.symbol_table).call(interpreter, arguments)?;
         }
 
         Ok(LoxValue::Callable(LoxCallable::Instance(instance)))
@@ -65,7 +66,7 @@ impl LoxClass {
         &self.name
     }
 
-    pub fn find_method(&self, name: &String) -> Option<&LoxCallable> {
+    pub fn find_method(&self, name: &Symbol) -> Option<&LoxCallable> {
         self.methods.get(name).or_else(|| {
             self.superclass.as_ref().and_then(|superclass| superclass.find_method(name))
         })

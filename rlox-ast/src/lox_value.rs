@@ -9,6 +9,7 @@ use crate::lox_callable::lox_class::LoxClass;
 use crate::lox_callable::lox_function::LoxFunction;
 use crate::lox_callable::lox_instance::LoxInstance;
 use crate::lox_callable::callable::Callable;
+use crate::symbol::SymbolTable;
 
 #[derive(Debug)]
 pub enum LoxValueError {
@@ -159,14 +160,14 @@ impl From<&Literal> for LoxValue {
 }
 
 impl Callable for LoxCallable {
-    fn arity(&self) -> usize {
+    fn arity(&self, symbol_table: &mut SymbolTable) -> usize {
         match self {
-            LoxCallable::Function(function) => function.as_ref().arity(),
-            LoxCallable::Class(class) => class.as_ref().arity(),
-            LoxCallable::Instance(instance) => instance.borrow().arity(),
+            LoxCallable::Function(function) => function.as_ref().arity(symbol_table),
+            LoxCallable::Class(class) => class.as_ref().arity(symbol_table),
+            LoxCallable::Instance(instance) => instance.borrow().arity(symbol_table),
             LoxCallable::NativeFunction(native_function) => match native_function {
-                NativeFunctions::ClockFunction(clock) => clock.as_ref().arity(),
-                NativeFunctions::InputFunction(input) => input.as_ref().arity(),
+                NativeFunctions::ClockFunction(clock) => clock.as_ref().arity(symbol_table),
+                NativeFunctions::InputFunction(input) => input.as_ref().arity(symbol_table),
             },
         }
     }

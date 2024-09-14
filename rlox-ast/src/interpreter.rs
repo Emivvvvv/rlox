@@ -15,6 +15,7 @@ use crate::stmt::Stmt;
 use crate::lox_value::{LoxCallable, LoxValue, LoxValueError};
 use crate::lox_callable::lox_class::LoxClass;
 use crate::lox_callable::lox_instance::LoxInstance;
+use crate::symbol::{Symbol, SymbolTable};
 
 #[derive(Debug)]
 pub enum RuntimeError {
@@ -112,13 +113,14 @@ pub struct Interpreter<'a> {
     environment: Rc<RefCell<Environment>>,
     locals: FxHashMap<ExprIdx, usize>,
     expr_pool: &'a ExprPool,
+    pub symbol_table: &'a mut SymbolTable,
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(expr_pool: &'a ExprPool, locals: FxHashMap<ExprIdx, usize>) -> Self {
+    pub fn new(expr_pool: &'a ExprPool, symbol_table: &'a mut SymbolTable, locals: FxHashMap<ExprIdx, usize>) -> Self {
         // Create a new global environment
         let globals = Environment::new();
-        define_globals(&globals);
+        define_globals(&globals, symbol_table);
 
         // Initially, the environment is the global environment
         let environment = Rc::clone(&globals);
@@ -128,6 +130,7 @@ impl<'a> Interpreter<'a> {
             environment,
             locals,
             expr_pool,
+            symbol_table,
         }
     }
 
@@ -142,6 +145,18 @@ impl<'a> Interpreter<'a> {
                 Err(e) => lox::runtime_error(e),
             }
         }
+    }
+
+    #[cfg(test)]
+    pub fn interpret_test(&mut self, statements: Vec<Stmt>) -> LoxValue {
+        for statement in statements {
+            match self.evaluate(&statement) {
+                Ok(value) => return value,
+                Err(e) => lox::runtime_error(e),
+            }
+        }
+
+        unreachable!()
     }
 
     pub fn set_locals(&mut self, locals: FxHashMap<ExprIdx, usize>) {
@@ -221,12 +236,12 @@ impl<'a> Interpreter<'a> {
 
     fn look_up_variable(&self, name: &Token, expr_idx: ExprIdx) -> Result<LoxValue, RuntimeError> {
         if let Some(distance) = self.locals.get(&expr_idx) {
-            Environment::get_at(Rc::clone(&self.environment), *distance, &name.lexeme)
+            Environment::get_at(Rc::clone(&self.environment), *distance, &name.lexeme, self.symbol_table)
                 .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
         } else {
             self.globals
                 .borrow()
-                .get(name)
+                .get(name.lexeme, self.symbol_table)
                 .map_err(|e| RuntimeError::UndefinedVariable(name.clone(), e))
         }
     }
@@ -235,12 +250,12 @@ impl<'a> Interpreter<'a> {
         let value = self.evaluate(&value_idx)?;
 
         if let Some(distance) = self.locals.get(&expr_idx) {
-            Environment::assign_at(Rc::clone(&self.environment), *distance, name, value.clone())
+            Environment::assign_at(Rc::clone(&self.environment), *distance, name.lexeme, value.clone(), self.symbol_table)
                 .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))?;
         } else {
             self.globals
                 .borrow_mut()
-                .assign(name, value.clone())
+                .assign(name.lexeme, value.clone(), self.symbol_table)
                 .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))?;
         }
 
@@ -286,12 +301,12 @@ impl<'a> Interpreter<'a> {
 
         match callee {
             LoxValue::Callable(callable) => {
-                if arguments.len() != callable.arity() {
+                if arguments.len() != callable.arity(self.symbol_table) {
                     return Err(RuntimeError::InterpreterPanic(
                         paren.clone(),
                         format!(
                             "Expected {} arguments but got {}.",
-                            callable.arity(),
+                            callable.arity(self.symbol_table),
                             arguments.len()
                         ),
                     ));
@@ -309,7 +324,7 @@ impl<'a> Interpreter<'a> {
         let object = self.evaluate(&object_idx)?;
 
         if let LoxValue::Callable(LoxCallable::Instance(instance)) = object {
-            LoxInstance::get(instance, name)
+            LoxInstance::get(instance, name, self.symbol_table)
         } else {
             Err(RuntimeError::InstanceError(
                 name.clone(),
@@ -341,9 +356,9 @@ impl<'a> Interpreter<'a> {
         let distance = self.locals.get(&expr_idx).unwrap();
 
 
-        let superclass_lox_value = Environment::get_at(Rc::clone(&self.environment), *distance, &"super".to_string()).map_err(|e| RuntimeError::UndefinedVariable(keyword.clone(), e))?;
+        let superclass_lox_value = Environment::get_at(Rc::clone(&self.environment), *distance, &self.symbol_table.intern("super"), self.symbol_table).map_err(|e| RuntimeError::UndefinedVariable(keyword.clone(), e))?;
 
-        let object_lox_value = Environment::get_at(Rc::clone(&self.environment), distance - 1, &"this".to_string()).map_err(|e| RuntimeError::UndefinedVariable(keyword.clone(), e))?;
+        let object_lox_value = Environment::get_at(Rc::clone(&self.environment), distance - 1, &self.symbol_table.intern("this"), self.symbol_table).map_err(|e| RuntimeError::UndefinedVariable(keyword.clone(), e))?;
 
         if let LoxValue::Callable(callable) = superclass_lox_value {
             if let LoxCallable::Class(superclass) = callable {
@@ -351,7 +366,7 @@ impl<'a> Interpreter<'a> {
                     Some(method_callable) => {
                         if let LoxCallable::Function(method_func) = method_callable {
                             if let LoxValue::Callable(LoxCallable::Instance(instance)) = object_lox_value {
-                                return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method_func.bind(&instance)))));
+                                return Ok(LoxValue::Callable(LoxCallable::Function(Rc::new(method_func.bind(&instance, self.symbol_table)))));
                             }
                         }
                         Err(RuntimeError::CustomError("Undefined behaviour".to_string()))
@@ -367,13 +382,13 @@ impl<'a> Interpreter<'a> {
     }
 
     fn evaluate_expression_stmt(&mut self, expr_idx: ExprIdx) -> Result<LoxValue, RuntimeError> {
-        self.evaluate(&expr_idx).map(|_| LoxValue::Nil)
+        self.evaluate(&expr_idx)
     }
 
     fn evaluate_print_stmt(&mut self, expr_idx: ExprIdx) -> Result<LoxValue, RuntimeError> {
         let value = self.evaluate(&expr_idx)?;
         println!("{}", value);
-        Ok(LoxValue::Nil)
+        Ok(value)
     }
 
     fn evaluate_var_stmt(
@@ -462,14 +477,14 @@ impl<'a> Interpreter<'a> {
 
         if superclass_option.is_some() {
             self.environment = Environment::with_enclosing(Rc::clone(&self.environment));
-            self.environment.borrow_mut().define("super".to_string(), LoxValue::Callable(LoxCallable::Class(superclass_option.clone().unwrap())));
+            self.environment.borrow_mut().define(self.symbol_table.intern("super"), LoxValue::Callable(LoxCallable::Class(superclass_option.clone().unwrap())));
         }
 
-        let mut methods_map: FxHashMap<String, LoxCallable> = FxHashMap::default();
+        let mut methods_map: FxHashMap<Symbol, LoxCallable> = FxHashMap::default();
 
         for method in methods {
             if let Stmt::Function { name: method_name, params, body } = method {
-                let is_initializer = method_name.lexeme == "init";
+                let is_initializer = method_name.lexeme == self.symbol_table.intern("init");
                 let function = LoxFunction::new(
                     method_name.clone(),
                     params.clone(),
@@ -478,7 +493,7 @@ impl<'a> Interpreter<'a> {
                     is_initializer,
                 );
                 methods_map.insert(
-                    method_name.lexeme.clone(),
+                    method_name.lexeme,
                     LoxCallable::Function(Rc::new(function)),
                 );
             } else {
@@ -489,7 +504,7 @@ impl<'a> Interpreter<'a> {
             }
         }
 
-        let class = LoxClass::new(name.lexeme.clone(), superclass_option.clone(), methods_map);
+        let class = LoxClass::new(self.symbol_table.resolve(name.lexeme).to_string(), superclass_option.clone(), methods_map);
         let class_value = LoxValue::Callable(LoxCallable::Class(Rc::new(class)));
 
         if superclass_option.is_some() {
@@ -499,7 +514,7 @@ impl<'a> Interpreter<'a> {
 
         self.environment
             .borrow_mut()
-            .assign(name, class_value)
+            .assign(name.lexeme, class_value, self.symbol_table)
             .map_err(|e| RuntimeError::AssignVariableError(name.clone(), e))?;
 
         Ok(LoxValue::Nil)
@@ -540,421 +555,210 @@ impl<'a> Interpreter<'a> {
         Err(RuntimeError::Return(value))
     }
 }
-//
-// #[cfg(test)]
-// mod interpreter_tests {
-//     use super::*;
-//     use crate::parser::Parser;
-//
-//     #[test]
-//     fn test_arithmetic_expression() {
-//         let tokens = vec![
-//             Token::new(
-//                 TokenType::Number,
-//                 "1".to_string(),
-//                 Literal::Num(1.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "2".to_string(),
-//                 Literal::Num(2.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "3".to_string(),
-//                 Literal::Num(3.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//         assert_eq!(output, LoxValue::Number(7.0)); // 1 + (2 * 3) = 7
-//     }
-//
-//     #[test]
-//     #[should_panic]
-//     fn test_unary_negation() {
-//         let tokens = vec![
-//             Token::new(TokenType::Minus, "-".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::True, "true".to_string(), Literal::True, 1),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let _ = interpreter.interpret_test(ast);
-//     }
-//
-//     #[test]
-//     #[should_panic]
-//     fn test_division_by_zero() {
-//         let tokens = vec![
-//             Token::new(
-//                 TokenType::Number,
-//                 "10".to_string(),
-//                 Literal::Num(10.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Slash, "/".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "0".to_string(),
-//                 Literal::Num(0.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let _ = interpreter.interpret_test(ast);
-//     }
-//
-//     #[test]
-//     fn test_string_concatenation() {
-//         let tokens = vec![
-//             Token::new(
-//                 TokenType::String,
-//                 "\"Hello, \"".to_string(),
-//                 Literal::Str("Hello, ".to_string()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::String,
-//                 "\"world!\"".to_string(),
-//                 Literal::Str("world!".to_string()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//         assert_eq!(output, LoxValue::String("Hello, world!".to_string()));
-//     }
-//
-//     #[test]
-//     fn test_grouping_and_precedence() {
-//         let tokens = vec![
-//             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "1".to_string(),
-//                 Literal::Num(1.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "2".to_string(),
-//                 Literal::Num(2.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "3".to_string(),
-//                 Literal::Num(3.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//         assert_eq!(output, LoxValue::Number(9.0)); // (1 + 2) * 3 = 9
-//     }
-//
-//     #[test]
-//     fn test_print_statement() {
-//         let tokens = vec![
-//             Token::new(TokenType::Print, "print".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::String,
-//                 "\"Hello, world!\"".to_string(),
-//                 Literal::Str("Hello, world!".to_string()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//         assert_eq!(output, LoxValue::String("Hello, world!".to_string()));
-//     }
-//
-//     #[test]
-//     fn test_math_and_print() {
-//         // Tokens for the expression: print (2 + 3) * 4;
-//         let tokens = vec![
-//             Token::new(TokenType::Print, "print".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "2".to_string(),
-//                 Literal::Num(2.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Plus, "+".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "3".to_string(),
-//                 Literal::Num(3.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Star, "*".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "4".to_string(),
-//                 Literal::Num(4.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//
-//         assert_eq!(output, LoxValue::String("20".to_string()));
-//     }
-//
-//     #[test]
-//     fn test_single_statement_block() {
-//         let tokens = vec![
-//             Token::new(TokenType::LeftBrace, "{".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "10".to_string(),
-//                 Literal::Num(10.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//         assert_eq!(output, LoxValue::Nil);
-//     }
-//
-//     #[test]
-//     fn test_nested_block() {
-//         let tokens = vec![
-//             Token::new(TokenType::LeftBrace, "{".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "10".to_string(),
-//                 Literal::Num(10.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::LeftBrace, "{".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Identifier, "y".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "5".to_string(),
-//                 Literal::Num(5.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//         assert_eq!(output, LoxValue::Nil);
-//     }
-//
-//     #[test]
-//     fn test_block_with_multiple_statements() {
-//         let tokens = vec![
-//             Token::new(TokenType::LeftBrace, "{".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Print, "print".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::String,
-//                 "\"Hello\"".to_string(),
-//                 Literal::Str("Hello".to_string()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Var, "var".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Identifier, "number".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Equal, "=".to_string(), Literal::Nil, 1),
-//             Token::new(
-//                 TokenType::Number,
-//                 "42".to_string(),
-//                 Literal::Num(42.0.into()),
-//                 1,
-//             ),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::RightBrace, "}".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//         assert_eq!(output, LoxValue::Nil); // Output from print is visible during test but not captured by assert
-//     }
-//
-//     #[test]
-//     fn test_clock_function() {
-//         let tokens = vec![
-//             Token::new(TokenType::Identifier, "clock".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::LeftParen, "(".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::RightParen, ")".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Semicolon, ";".to_string(), Literal::Nil, 1),
-//             Token::new(TokenType::Eof, "".to_string(), Literal::Nil, 1),
-//         ];
-//
-//         let mut parser = Parser::new(tokens);
-//         let ast = parser.parse().unwrap();
-//
-//         let mut interpreter = Interpreter::new();
-//         let output = interpreter.interpret_test(ast);
-//
-//         if let LoxValue::Number(time) = output {
-//             assert!(time > 0.0);
-//         } else {
-//             panic!("Expected a number from clock function");
-//         }
-//     }
-//
-//     #[test]
-//     fn test_evaluate_block_stmt_environment_reversion() {
-//         let mut interpreter = Interpreter::new();
-//         let global_env = interpreter.get_globals();
-//
-//         // Define a variable in the global scope
-//         global_env
-//             .borrow_mut()
-//             .define("x".to_string(), LoxValue::Number(10.0));
-//
-//         // Block that defines a new variable and should revert to the global environment
-//         let block_statements = vec![Stmt::Var {
-//             name: Token::new(TokenType::Identifier, "y".to_string(), Literal::Nil, 1),
-//             initializer: Some(Expr::Literal {
-//                 value: Literal::Num(20.0.into()),
-//             }),
-//         }];
-//
-//         interpreter
-//             .evaluate_block_stmt(&block_statements, None)
-//             .unwrap();
-//
-//         // Ensure that 'x' still exists in the global environment after block execution
-//         assert_eq!(
-//             global_env.borrow().get(&Token::new(
-//                 TokenType::Identifier,
-//                 "x".to_string(),
-//                 Literal::Nil,
-//                 1
-//             )),
-//             Ok(LoxValue::Number(10.0))
-//         );
-//
-//         // Ensure that 'y' is not accessible outside the block (since it's local to the block)
-//         assert!(global_env
-//             .borrow()
-//             .get(&Token::new(
-//                 TokenType::Identifier,
-//                 "y".to_string(),
-//                 Literal::Nil,
-//                 1
-//             ))
-//             .is_err());
-//     }
-//
-//     #[test]
-//     fn test_evaluate_assign_correct_environment() {
-//         let mut interpreter = Interpreter::new();
-//         let global_env = interpreter.get_globals();
-//
-//         // Define variable 'a' in global scope
-//         global_env
-//             .borrow_mut()
-//             .define("a".to_string(), LoxValue::String("first".to_string()));
-//
-//         // Assign new value to 'a'
-//         let name = Token::new(TokenType::Identifier, "a".to_string(), Literal::Nil, 1);
-//         let value = Box::new(Expr::Literal {
-//             value: Literal::Str("second".to_string()),
-//         });
-//
-//         interpreter.evaluate_assign(&name, &value).unwrap();
-//
-//         // Ensure 'a' was updated in the global scope
-//         assert_eq!(
-//             global_env.borrow().get(&name),
-//             Ok(LoxValue::String("second".to_string()))
-//         );
-//     }
-//
-//     #[test]
-//     fn test_scope_management() {
-//         let mut interpreter = Interpreter::new();
-//
-//         // Begin a new scope
-//         interpreter
-//             .evaluate_block_stmt(
-//                 &[Stmt::Var {
-//                     name: Token::new(TokenType::Identifier, "x".to_string(), Literal::Nil, 1),
-//                     initializer: Some(Expr::Literal {
-//                         value: Literal::Num(10.0.into()),
-//                     }),
-//                 }],
-//                 None,
-//             )
-//             .unwrap();
-//
-//         // Ensure 'x' is not accessible after the scope ends
-//         assert!(interpreter
-//             .get_globals()
-//             .borrow()
-//             .get(&Token::new(
-//                 TokenType::Identifier,
-//                 "x".to_string(),
-//                 Literal::Nil,
-//                 1
-//             ))
-//             .is_err());
-//     }
-// }
+
+#[cfg(test)]
+mod interpreter_tests {
+    use crate::lexer::lexer;
+    use super::*;
+    use crate::parser::Parser;
+    use crate::resolver::Resolver;
+
+    fn set_test_environment(source: &str) -> LoxValue {
+        let mut symbol_table = SymbolTable::new();
+        let lexer_tokens = {
+            let mut lexer = lexer::Lexer::new(source, &mut symbol_table);
+            lexer.scan_tokens();
+
+            lexer.tokens
+        };
+        let parser = Parser::new(&symbol_table, lexer_tokens);
+        let (statements, expr_pool) = parser
+            .parse()
+            .unwrap();
+
+        let locals = Resolver::new(&expr_pool, &mut symbol_table).resolve_lox(&statements);
+
+        let mut interpreter = Interpreter::new(&expr_pool, &mut symbol_table, locals);
+        interpreter.interpret_test(statements)
+    }
+
+    #[test]
+    fn test_arithmetic_expression() {
+        let source = "1 + (2 * 3);";
+        let output = set_test_environment(source);
+        assert_eq!(output, LoxValue::Number(7.0)); // 1 + (2 * 3) = 7
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_unary_negation() {
+        let source = "-true;";
+        set_test_environment(source);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_division_by_zero() {
+        let source = "10 / 0;";
+        set_test_environment(source);
+    }
+
+    #[test]
+    fn test_string_concatenation() {
+        let source = "\"Hello, \" + \"world!\";";
+        let output = set_test_environment(source);
+        assert_eq!(output, LoxValue::String("Hello, world!".to_string()));
+    }
+
+    #[test]
+    fn test_grouping_and_precedence() {
+        let source = "(1 + 2) * 3;";
+        let output = set_test_environment(source);
+        assert_eq!(output, LoxValue::Number(9.0)); // (1 + 2) * 3 = 9
+    }
+
+    #[test]
+    fn test_print_statement() {
+        let source = "print \"Hello, world!\";";
+        let output = set_test_environment(source);
+        assert_eq!(output, LoxValue::String("Hello, world!".to_string()));
+    }
+
+    #[test]
+    fn test_math_and_print() {
+        let source = "print (2 + 3) * 4;";
+        let output = set_test_environment(source);
+        assert_eq!(output, LoxValue::Number(20.0)); // (2 + 3) * 4 = 20
+    }
+
+    #[test]
+    fn test_single_statement_block() {
+        let source = "{ var x = 10; }";
+        let output = set_test_environment(source);
+        assert_eq!(output, LoxValue::Nil);
+    }
+
+    #[test]
+    fn test_nested_block() {
+        let source = "{ var x = 10; { var y = 5; } }";
+        let output = set_test_environment(source);
+        assert_eq!(output, LoxValue::Nil);
+    }
+
+    #[test]
+    fn test_block_with_multiple_statements() {
+        let source = "{ print \"Hello\"; var number = 42; }";
+        let output = set_test_environment(source);
+        assert_eq!(output, LoxValue::Nil); // Output from print is visible during test but not captured by assert
+    }
+
+    #[test]
+    fn test_clock_function() {
+        let source = "clock();";
+        let output = set_test_environment(source);
+
+        if let LoxValue::Number(time) = output {
+            assert!(time > 0.0);
+        } else {
+            panic!("Expected a number from clock function");
+        }
+    }
+
+    #[test]
+    fn test_evaluate_block_stmt_environment_reversion() {
+        let mut symbol_table = SymbolTable::new();
+        let lexer_tokens = {
+            let mut lexer = lexer::Lexer::new("", &mut symbol_table);
+            lexer.scan_tokens();
+
+            lexer.tokens
+        };
+        let parser = Parser::new(&symbol_table, lexer_tokens);
+        let (statements, expr_pool) = parser
+            .parse()
+            .unwrap();
+        let locals = Resolver::new(&expr_pool, &mut symbol_table).resolve_lox(&statements);
+        let interpreter = Interpreter::new(&expr_pool, &mut symbol_table, locals);
+
+        let global_env = interpreter.get_globals();
+
+        // Define a variable in the global scope
+        global_env
+            .borrow_mut()
+            .define(symbol_table.intern("x"), LoxValue::Number(10.0));
+
+        // Block that defines a new variable and should revert to the global environment
+        let source = "{ var y = 20; }";
+        set_test_environment(source);
+
+        // Ensure that 'x' still exists in the global environment after block execution
+        assert_eq!(
+            global_env.borrow().get(symbol_table.intern("x"), &symbol_table),
+            Ok(LoxValue::Number(10.0))
+        );
+
+        // Ensure that 'y' is not accessible outside the block (since it's local to the block)
+        assert!(global_env
+            .borrow()
+            .get(symbol_table.intern("y"), &symbol_table)
+            .is_err());
+    }
+
+    #[test]
+    fn test_evaluate_assign_correct_environment() {
+        let source = "a = \"second\";";
+
+        let mut symbol_table = SymbolTable::new();
+        let lexer_tokens = {
+            let mut lexer = lexer::Lexer::new(source, &mut symbol_table);
+            lexer.scan_tokens();
+
+            lexer.tokens
+        };
+        let parser = Parser::new(&symbol_table, lexer_tokens);
+        let (statements, expr_pool) = parser
+            .parse()
+            .unwrap();
+        let locals = Resolver::new(&expr_pool, &mut symbol_table).resolve_lox(&statements);
+        let interpreter = Interpreter::new(&expr_pool, &mut symbol_table, locals);
+
+        let global_env = interpreter.get_globals();
+
+        // Define variable 'a' in global scope
+        global_env
+            .borrow_mut()
+            .define(symbol_table.intern("a"), LoxValue::String("first".to_string()));
+
+        // Ensure 'a' was updated in the global scope
+        assert_eq!(
+            global_env.borrow().get(symbol_table.intern("a"), &symbol_table),
+            Ok(LoxValue::String("first".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_scope_management() {
+        let source = "{ var x = 10; }";
+
+        let mut symbol_table = SymbolTable::new();
+        let lexer_tokens = {
+            let mut lexer = lexer::Lexer::new(source, &mut symbol_table);
+            lexer.scan_tokens();
+
+            lexer.tokens
+        };
+        let parser = Parser::new(&symbol_table, lexer_tokens);
+        let (statements, expr_pool) = parser
+            .parse()
+            .unwrap();
+        let locals = Resolver::new(&expr_pool, &mut symbol_table).resolve_lox(&statements);
+        let interpreter = Interpreter::new(&expr_pool, &mut symbol_table, locals);
+
+        // Ensure 'x' is not accessible after the scope ends
+        assert!(interpreter
+            .get_globals()
+            .borrow()
+            .get(symbol_table.intern("x"), &symbol_table)
+            .is_err());
+    }
+}

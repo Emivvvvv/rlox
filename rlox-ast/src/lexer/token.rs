@@ -3,6 +3,7 @@ use std::hash::Hash;
 
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use crate::symbol::{Symbol, SymbolTable};
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum TokenType {
@@ -90,16 +91,34 @@ pub enum Literal {
     Nil,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Token {
+pub struct ErrorToken {
     pub token_type: TokenType,
     pub lexeme: String,
     pub literal: Literal,
     pub line: usize,
 }
 
+impl ErrorToken {
+    pub fn new(token: &Token, symbol_table: &SymbolTable) -> Self {
+        Self {
+            token_type: token.token_type.clone(),
+            lexeme: symbol_table.resolve(token.lexeme).to_string(),
+            literal: token.literal.clone(),
+            line: token.line,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct Token {
+    pub token_type: TokenType,
+    pub lexeme: Symbol,
+    pub literal: Literal,
+    pub line: usize,
+}
+
 impl Token {
-    pub fn new(token_type: TokenType, lexeme: String, literal: Literal, line: usize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: Symbol, literal: Literal, line: usize) -> Self {
         Token {
             token_type,
             lexeme,

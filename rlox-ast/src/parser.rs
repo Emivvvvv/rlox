@@ -1,23 +1,26 @@
 use crate::expr::{Expr, ExprIdx, ExprPool};
-use crate::lexer::token::{Literal, Token, TokenType};
+use crate::lexer::token::{ErrorToken, Literal, Token, TokenType};
 use crate::lox;
 use crate::stmt::Stmt;
+use crate::symbol::SymbolTable;
 
 #[derive(Debug, Clone)]
 pub struct ParseError;
 
-pub struct Parser {
+pub struct Parser<'a> {
     tokens: Vec<Token>,
     current: usize,
     expr_pool: ExprPool,
+    symbol_table: &'a SymbolTable
 }
 
-impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+impl<'a> Parser<'a> {
+    pub fn new(symbol_table: &'a SymbolTable, tokens: Vec<Token>) -> Self {
         Self {
             tokens,
             current: 0,
             expr_pool: ExprPool { exprs: Vec::new() },
+            symbol_table
         }
     }
 
@@ -320,7 +323,7 @@ impl Parser {
                     return Ok(idx);
                 }
                 _ => {
-                    lox::error(&equals, "Invalid assignment target.");
+                    lox::error(&ErrorToken::new(&equals, self.symbol_table), "Invalid assignment target.");
                 }
             }
         }
@@ -611,7 +614,7 @@ impl Parser {
     }
 
     fn error(&self, token: Token, message: &str) -> ParseError {
-        lox::error(&token, message);
+        lox::error(&ErrorToken::new(&token, self.symbol_table), message);
 
         ParseError
     }
@@ -640,6 +643,7 @@ impl Parser {
         }
     }
 }
+
 //
 // #[cfg(test)]
 // mod tests {
