@@ -26,7 +26,7 @@ Rust implementation of the clox interpreter from the third chapter of "Crafting 
 <br>
 
 > [!NOTE]
-> The foundation of rclox was inspired by [jeschkies's lox-rs implementation](https://github.com/jeschkies/lox-rs/blob/master/bytecode/).
+> The foundation of rlox-bytecode was inspired by [jeschkies's lox-rs implementation](https://github.com/jeschkies/lox-rs/blob/master/bytecode/).
 
 <br>
 
@@ -34,9 +34,9 @@ Rust implementation of the clox interpreter from the third chapter of "Crafting 
 |:------------------------:|:------:|
 |    Chunks of Bytecode    |   ✅    |
 |    A Virtual Machine     |   ✅    |
-|    Scanning on Demand    |   ⏳    |
-|  Compiling Expressions   |   ⏳    |
-|     Types of Values      |   ⏳    |
+|    Scanning on Demand    |   ✅    |
+|  Compiling Expressions   |   ✅    |
+|     Types of Values      |   ✅    |
 |         Strings          |   ⏳    |
 |       Hash Tables        |   ⏳    |
 |     Global Variables     |   ⏳    |
