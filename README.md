@@ -25,14 +25,20 @@ Rust implementation of the jlox interpreter from the second chapter of "Crafting
 
 ```shell
 sh run_benchmark.sh
-binary_trees.lox,16.811022996902466
-equality.lox,6.28954291343689
-fib.lox,66.90174412727356
-instantiation.lox,4.425313949584961
-invocation.lox,2.363626003265381
-method_call.lox,1.3553078174591064
-properties.lox,3.2026171684265137
 ```
+
+|        File         |      Took (s)      |
+|:-------------------:|:------------------:|
+|  binary_trees.lox   | 11.058765888214111 |
+|    equality.lox     | 5.993005990982056  |
+|       fib.lox       | 66.72664785385132  |
+|  instantiation.lox  | 4.426839828491211  |
+|   invocation.lox    | 2.3550169467926025 |
+|   method_call.lox   | 1.3441059589385986 |
+|   properties.lox    | 3.2077040672302246 |
+| string_equality.lox | 4.504413843154907  |
+|      trees.lox      | 15.673010110855103 |
+|       zoo.lox       | 2.396976947784424  |
 
 # rlox-bytecode roadmap
 Rust implementation of the clox interpreter from the third chapter of "Crafting Interpreters".
@@ -47,9 +53,9 @@ Rust implementation of the clox interpreter from the third chapter of "Crafting 
 |:------------------------:|:------:|
 |    Chunks of Bytecode    |   ✅    |
 |    A Virtual Machine     |   ✅    |
-|    Scanning on Demand    |   ⏳    |
-|  Compiling Expressions   |   ⏳    |
-|     Types of Values      |   ⏳    |
+|    Scanning on Demand    |   ✅    |
+|  Compiling Expressions   |   ✅    |
+|     Types of Values      |   ✅    |
 |         Strings          |   ⏳    |
 |       Hash Tables        |   ⏳    |
 |     Global Variables     |   ⏳    |
