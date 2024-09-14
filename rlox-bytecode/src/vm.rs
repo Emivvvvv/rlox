@@ -33,7 +33,7 @@ impl VM {
         VM {
             chunk: Chunk::new(),
             ip: ptr::null(),
-            stack: [Value::new_nil(); STACK_MAX],
+            stack: std::array::from_fn(|_| Value::new_nil()),
             stack_top: 0,
         }
     }
@@ -77,7 +77,7 @@ impl VM {
             panic!("Stack underflow!");
         }
         self.stack_top -= 1;
-        self.stack[self.stack_top]
+        std::mem::replace(&mut self.stack[self.stack_top], Value::new_nil())
     }
 
     fn peek(&self, distance: usize) -> &Value {
@@ -108,8 +108,7 @@ impl VM {
 
                 let b = self.pop();
                 let a = self.pop();
-                let _ = a $op b;
-                self.push(a);
+                self.push(a $op b);
 
             }};
         }
@@ -165,7 +164,7 @@ impl VM {
 
             match *instruction {
                 OpCode::OpConstant(constant) => {
-                    let value = self.chunk.constants[constant];
+                    let value = self.chunk.constants[constant].clone();
                     self.push(value);
                 }
                 OpCode::OpTrue => self.push(Value::new_bool(true)),
