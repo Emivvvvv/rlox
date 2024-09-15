@@ -27,20 +27,20 @@ Rust implementation of the jlox interpreter from the second chapter of "Crafting
 sh run_benchmark.sh
 ```
 
-|        File         |      Took (s)      |
-|:-------------------:|:------------------:|
-|  binary_trees.lox   | 11.058765888214111 |
-|    equality.lox     | 5.993005990982056  |
-|       fib.lox       | 66.72664785385132  |
-|  instantiation.lox  | 4.426839828491211  |
-|   invocation.lox    | 2.3550169467926025 |
-|   method_call.lox   | 1.3441059589385986 |
-|   properties.lox    | 3.2077040672302246 |
-| string_equality.lox | 4.504413843154907  |
-|      trees.lox      | 15.673010110855103 |
-|       zoo.lox       | 2.396976947784424  |
+| File                 | Took (s)           |
+|:--------------------:|:------------------:|
+| binary_trees.lox     | 11.44656           |
+| equality.lox         | 5.98698            |
+| fib.lox              | 6.07373            |
+| instantiation.lox    | 4.41940            |
+| invocation.lox       | 2.35333            |
+| method_call.lox      | 1.35501            |
+| properties.lox       | 3.22026            |
+| string_equality.lox  | 4.48729            |
+| trees.lox            | 16.29571           |
+| zoo.lox              | 2.39398            |
 
-# rlox-bytecode roadmap
+# rlox-bytecode roadmap (The project is on hold for now.)
 Rust implementation of the clox interpreter from the third chapter of "Crafting Interpreters".
 <br>
 

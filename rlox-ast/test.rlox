@@ -4,6 +4,6 @@ fun fib(n) {
 }
 
 var start = clock();
-print fib(40) == 9227465;
+print fib(40) == 102334155;
 print "elapsed:";
 print clock() - start;

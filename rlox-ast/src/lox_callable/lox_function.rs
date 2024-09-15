@@ -54,7 +54,7 @@ impl Callable for LoxFunction {
 
         // Bind parameters
         for (param, argument) in self.params.iter().zip(arguments.iter()) {
-            environment.borrow_mut().define(param.lexeme.clone(), argument.clone());
+            environment.borrow_mut().define(param.lexeme, argument.clone());
         }
 
         // Execute the function body

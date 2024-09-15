@@ -558,7 +558,7 @@ impl<'a> Interpreter<'a> {
 
 #[cfg(test)]
 mod interpreter_tests {
-    use crate::lexer::lexer;
+    use crate::lexer::scanner;
     use super::*;
     use crate::parser::Parser;
     use crate::resolver::Resolver;
@@ -566,7 +566,7 @@ mod interpreter_tests {
     fn set_test_environment(source: &str) -> LoxValue {
         let mut symbol_table = SymbolTable::new();
         let lexer_tokens = {
-            let mut lexer = lexer::Lexer::new(source, &mut symbol_table);
+            let mut lexer = scanner::Scanner::new(source, &mut symbol_table);
             lexer.scan_tokens();
 
             lexer.tokens
@@ -668,7 +668,7 @@ mod interpreter_tests {
     fn test_evaluate_block_stmt_environment_reversion() {
         let mut symbol_table = SymbolTable::new();
         let lexer_tokens = {
-            let mut lexer = lexer::Lexer::new("", &mut symbol_table);
+            let mut lexer = scanner::Scanner::new("", &mut symbol_table);
             lexer.scan_tokens();
 
             lexer.tokens
@@ -710,7 +710,7 @@ mod interpreter_tests {
 
         let mut symbol_table = SymbolTable::new();
         let lexer_tokens = {
-            let mut lexer = lexer::Lexer::new(source, &mut symbol_table);
+            let mut lexer = scanner::Scanner::new(source, &mut symbol_table);
             lexer.scan_tokens();
 
             lexer.tokens
@@ -742,7 +742,7 @@ mod interpreter_tests {
 
         let mut symbol_table = SymbolTable::new();
         let lexer_tokens = {
-            let mut lexer = lexer::Lexer::new(source, &mut symbol_table);
+            let mut lexer = scanner::Scanner::new(source, &mut symbol_table);
             lexer.scan_tokens();
 
             lexer.tokens

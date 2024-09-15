@@ -2,7 +2,7 @@ use crate::lexer::token::{Hf64, Token, TokenType, Literal};
 use crate::lox::report;
 use crate::symbol::SymbolTable;
 
-pub struct Lexer<'a> {
+pub struct Scanner<'a> {
     source: &'a str,
     pub tokens: Vec<Token>,
     start: usize,
@@ -11,7 +11,7 @@ pub struct Lexer<'a> {
     symbol_table: &'a mut SymbolTable,
 }
 
-impl<'a> Lexer<'a> {
+impl<'a> Scanner<'a> {
     pub fn new(source: &'a str, symbol_table: &'a mut SymbolTable) -> Self {
         let tokens: Vec<Token> = Vec::new();
         Self {
@@ -267,8 +267,8 @@ mod tests {
     fn test_basic_tokens() {
         let source = "( ) { } , . - + ; * ! = < > /";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
         let expected_types = [
             TokenType::LeftParen,
             TokenType::RightParen,
@@ -288,9 +288,9 @@ mod tests {
             TokenType::Eof,
         ];
 
-        assert_eq!(lexer.tokens.len(), expected_types.len());
+        assert_eq!(scanner.tokens.len(), expected_types.len());
 
-        for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
+        for (token, expected_type) in scanner.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
         }
     }
@@ -299,11 +299,11 @@ mod tests {
     fn test_string_literal() {
         let source = "\"hello world\"";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
-        assert_eq!(lexer.tokens.len(), 2); // String token + EOF
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
+        assert_eq!(scanner.tokens.len(), 2); // String token + EOF
 
-        let lexeme_symbol = lexer.tokens[0].lexeme;
+        let lexeme_symbol = scanner.tokens[0].lexeme;
         let lexeme = symbol_table.resolve(lexeme_symbol);
         assert_eq!(lexeme, "\"hello world\"");
     }
@@ -312,12 +312,12 @@ mod tests {
     fn test_numbers() {
         let source = "123 456.789";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
-        assert_eq!(lexer.tokens.len(), 3); // Two number tokens + EOF
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
+        assert_eq!(scanner.tokens.len(), 3); // Two number tokens + EOF
 
-        let lexeme1_symbol = lexer.tokens[0].lexeme;
-        let lexeme2_symbol = lexer.tokens[1].lexeme;
+        let lexeme1_symbol = scanner.tokens[0].lexeme;
+        let lexeme2_symbol = scanner.tokens[1].lexeme;
 
         let lexeme1 = symbol_table.resolve(lexeme1_symbol);
         let lexeme2 = symbol_table.resolve(lexeme2_symbol);
@@ -330,12 +330,12 @@ mod tests {
     fn test_comments() {
         let source = "// This is a comment\n123";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
 
-        assert_eq!(lexer.tokens.len(), 2); // Number token + EOF
+        assert_eq!(scanner.tokens.len(), 2); // Number token + EOF
 
-        let lexeme_symbol = lexer.tokens[0].lexeme;
+        let lexeme_symbol = scanner.tokens[0].lexeme;
         let lexeme = symbol_table.resolve(lexeme_symbol);
         assert_eq!(lexeme, "123");
     }
@@ -344,12 +344,12 @@ mod tests {
     fn test_block_comments() {
         let source = "/* This is a block comment */ 456";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
 
-        assert_eq!(lexer.tokens.len(), 2); // Number token + EOF
+        assert_eq!(scanner.tokens.len(), 2); // Number token + EOF
 
-        let lexeme_symbol = lexer.tokens[0].lexeme;
+        let lexeme_symbol = scanner.tokens[0].lexeme;
         let lexeme = symbol_table.resolve(lexeme_symbol);
         assert_eq!(lexeme, "456");
     }
@@ -358,12 +358,12 @@ mod tests {
     fn test_nested_block_comments() {
         let source = "/* This is a /* nested */ block comment */ 789";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
 
-        assert_eq!(lexer.tokens.len(), 2); // Number token + EOF
+        assert_eq!(scanner.tokens.len(), 2); // Number token + EOF
 
-        let lexeme_symbol = lexer.tokens[0].lexeme;
+        let lexeme_symbol = scanner.tokens[0].lexeme;
         let lexeme = symbol_table.resolve(lexeme_symbol);
         assert_eq!(lexeme, "789");
     }
@@ -372,10 +372,10 @@ mod tests {
     fn test_unterminated_string() {
         let source = "\"This string does not close";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
 
-        assert!(lexer
+        assert!(scanner
             .tokens
             .iter()
             .any(|t| t.token_type == TokenType::Eof && symbol_table.resolve(t.lexeme).is_empty()));
@@ -385,8 +385,8 @@ mod tests {
     fn test_keywords() {
         let source = "class var if else";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
         let expected_types = [
             TokenType::Class,
             TokenType::Var,
@@ -394,9 +394,9 @@ mod tests {
             TokenType::Else,
             TokenType::Eof,
         ];
-        assert_eq!(lexer.tokens.len(), expected_types.len());
+        assert_eq!(scanner.tokens.len(), expected_types.len());
 
-        for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
+        for (token, expected_type) in scanner.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
         }
     }
@@ -405,25 +405,25 @@ mod tests {
     fn test_identifiers() {
         let source = "foo bar baz";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
         let expected_types = [
             TokenType::Identifier,
             TokenType::Identifier,
             TokenType::Identifier,
             TokenType::Eof,
         ];
-        assert_eq!(lexer.tokens.len(), expected_types.len());
+        assert_eq!(scanner.tokens.len(), expected_types.len());
 
-        for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
+        for (token, expected_type) in scanner.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
             assert!(matches!(token.literal, Literal::Nil));
         }
 
         // Extract and resolve symbols
-        let lexeme1_symbol = lexer.tokens[0].lexeme;
-        let lexeme2_symbol = lexer.tokens[1].lexeme;
-        let lexeme3_symbol = lexer.tokens[2].lexeme;
+        let lexeme1_symbol = scanner.tokens[0].lexeme;
+        let lexeme2_symbol = scanner.tokens[1].lexeme;
+        let lexeme3_symbol = scanner.tokens[2].lexeme;
 
         let lexeme1 = symbol_table.resolve(lexeme1_symbol);
         let lexeme2 = symbol_table.resolve(lexeme2_symbol);
@@ -438,8 +438,8 @@ mod tests {
     fn test_mixed_input() {
         let source = "var x = 100; // variable declaration\nfunc(y)";
         let mut symbol_table = SymbolTable::new();
-        let mut lexer = Lexer::new(source, &mut symbol_table);
-        lexer.scan_tokens();
+        let mut scanner = Scanner::new(source, &mut symbol_table);
+        scanner.scan_tokens();
         let expected_types = [
             TokenType::Var,
             TokenType::Identifier,
@@ -452,9 +452,9 @@ mod tests {
             TokenType::RightParen,
             TokenType::Eof,
         ];
-        assert_eq!(lexer.tokens.len(), expected_types.len());
+        assert_eq!(scanner.tokens.len(), expected_types.len());
 
-        for (token, expected_type) in lexer.tokens.iter().zip(expected_types.iter()) {
+        for (token, expected_type) in scanner.tokens.iter().zip(expected_types.iter()) {
             assert_eq!(token.token_type, *expected_type);
         }
     }

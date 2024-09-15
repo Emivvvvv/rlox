@@ -102,9 +102,8 @@ impl Environment {
     pub fn ancestor(env: Rc<RefCell<Environment>>, distance: usize) -> Rc<RefCell<Environment>> {
         let mut environment = env;
         for _ in 0..distance {
-            let next_env = environment.borrow().enclosing.as_ref()
-                .expect("Ancestor not found.")
-                .clone();
+            let next_env = Rc::clone(environment.borrow().enclosing.as_ref()
+                .expect("Ancestor not found."));
             environment = next_env;
         }
         environment

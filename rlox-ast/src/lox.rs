@@ -6,7 +6,7 @@ use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::Path;
 
 use crate::interpreter::{Interpreter, RuntimeError};
-use crate::lexer::lexer;
+use crate::lexer::scanner;
 use crate::lexer::token::{ErrorToken, TokenType};
 use crate::parser::Parser;
 use crate::resolver::Resolver;
@@ -92,7 +92,7 @@ pub fn run_prompt() -> Result<(), LoxError> {
 pub fn run(source: &str) -> Result<(), LoxError> {
     let mut symbol_table = SymbolTable::new();
     let lexer_tokens = {
-        let mut lexer = lexer::Lexer::new(source, &mut symbol_table);
+        let mut lexer = scanner::Scanner::new(source, &mut symbol_table);
         lexer.scan_tokens();
 
         lexer.tokens
